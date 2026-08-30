@@ -38,6 +38,16 @@ export function normalizeDate(dateStr) {
                 return date.toISOString().split('T')[0];
             }
         }
+        // MM/DD/YY or MM-DD-YY (2-digit year) - Audible commonly shows release dates
+        // this way, e.g. "Release date: 03-03-26". Assume 20xx century.
+        const slashDateShortYear = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/.exec(cleaned);
+        if (slashDateShortYear) {
+            const year = 2000 + parseInt(slashDateShortYear[3], 10);
+            const date = new Date(`${year}-${slashDateShortYear[1].padStart(2, '0')}-${slashDateShortYear[2].padStart(2, '0')}`);
+            if (!isNaN(date.getTime())) {
+                return date.toISOString().split('T')[0];
+            }
+        }
         // Try generic Date parsing as last resort
         const date = new Date(cleaned);
         if (!isNaN(date.getTime())) {
@@ -271,4 +281,48 @@ export function isFinalBook(title, description) {
     ];
     const textToCheck = `${title} ${description || ''}`.toLowerCase();
     return finalIndicators.some(pattern => pattern.test(textToCheck));
+}
+/**
+ * Check whether a scraped item's title actually belongs to a tracked series -
+ * fuzzy series-name match plus exclusion of merchandise/variant search pollution
+ * (graphic novels, foreign editions, physical goods, etc). Used to filter raw
+ * snapshot items down to "real" books for a series before aggregating things like
+ * next-book-number or upcoming release dates.
+ */
+export function matchesSeriesName(itemTitle, seriesTitle) {
+    const title = (itemTitle || '').toLowerCase();
+    const seriesName = (seriesTitle || '').toLowerCase();
+    if (!title || !seriesName)
+        return false;
+    let matchesSeries = false;
+    const normalizeForMatch = (str) => str
+        .replace(/^the\s+/i, '')
+        .replace(/[^\w\s]/g, ' ')
+        .replace(/s\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const normalizedSeries = normalizeForMatch(seriesName);
+    const normalizedTitle = normalizeForMatch(title);
+    if (normalizedTitle.includes(normalizedSeries)) {
+        matchesSeries = true;
+    }
+    if (title.includes(seriesName)) {
+        matchesSeries = true;
+    }
+    const seriesNameNoThe = seriesName.replace(/^the\s+/, '');
+    if (seriesNameNoThe !== seriesName && title.includes(seriesNameNoThe)) {
+        matchesSeries = true;
+    }
+    if (!matchesSeries)
+        return false;
+    const pollutionKeywords = [
+        'graphic novel', 'light novel', 'manga', 'vol.', 'volume 1', 'volume 2', 'volume 3',
+        'french edition', 'german edition', 'spanish edition', 'édition française', 'édition',
+        'dramatized adaptation', 'dramatized audio', 'full cast', 'full-cast', 'radio play',
+        'bookmark', 'shirt', 't-shirt', 'tshirt', 'poster', 'print', 'merch',
+        'mug', 'tumbler', 'cup', 'sticker', 'decal', 'sign', 'metal', 'vinyl', 'canvas', 'artwork',
+        '[dvd]', '[blu-ray]', 'dvd', 'blu-ray', 'bluray', 'movie', 'film', 'renewed',
+        'gift', 'gifts', 'notebook', 'journal', 'calendar'
+    ];
+    return !pollutionKeywords.some(keyword => title.includes(keyword));
 }

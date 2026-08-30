@@ -2,8 +2,7 @@
  * Options page logic
  */
 import { StorageManager } from './storage.js';
-import { StatsCalculator } from './statistics.js';
-import { formatTimestamp } from './utils.js';
+import { formatTimestamp, matchesSeriesName } from './utils.js';
 // Current editing series ID (null for new)
 let editingSeriesId = null;
 // DOM Elements
@@ -45,7 +44,7 @@ const testUrlsBtn = document.getElementById('testUrlsBtn');
 const validationResults = document.getElementById('validationResults');
 const saveSeriesBtn = document.getElementById('saveSeriesBtn');
 // Statistics
-const refreshStatsBtn = document.getElementById('refreshStatsBtn');
+const refreshUpcomingBtn = document.getElementById('refreshUpcomingBtn');
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     setupNavigation();
@@ -53,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAuditUI();
     await loadSeries();
     await loadSettings();
-    await loadStatistics();
+    await loadUpcomingBooks();
 });
 /**
  * Setup navigation
@@ -95,8 +94,11 @@ function setupEventListeners() {
     });
     // URL Testing
     testUrlsBtn.addEventListener('click', testSeriesUrls);
-    // Statistics
-    refreshStatsBtn.addEventListener('click', loadStatistics);
+    // Upcoming Books
+    refreshUpcomingBtn.addEventListener('click', loadUpcomingBooks);
+    document.querySelectorAll('.nav-item[data-tab="upcoming"]').forEach(item => {
+        item.addEventListener('click', () => loadUpcomingBooks());
+    });
     // Settings
     quietHoursEnabled.addEventListener('change', () => {
         quietHoursSettings.style.display = quietHoursEnabled.checked ? 'flex' : 'none';
@@ -444,58 +446,106 @@ async function importData() {
 /**
  * Load and display statistics
  */
-async function loadStatistics() {
-    const stats = await StatsCalculator.calculateStatistics();
-    // Update overview cards
-    document.getElementById('totalSeriesStat').textContent = stats.totalSeries.toString();
-    document.getElementById('activeSeriesStat').textContent = stats.activeSeries.toString();
-    document.getElementById('totalUpdatesStat').textContent = stats.totalUpdates.toString();
-    document.getElementById('unreadUpdatesStat').textContent = stats.unreadUpdates.toString();
-    // Upcoming releases
+/**
+ * Scan every series' latest Audible snapshot for pre-order items (the only place
+ * Audible actually publishes a release date) and build a sorted "what's coming up"
+ * list. Only items that pass matchesSeriesName() count, so cross-series search
+ * pollution never shows up here as a false "upcoming" release.
+ */
+async function getUpcomingReleases() {
+    const allSeries = await StorageManager.getAllSeries();
+    const { snapshots = {} } = await chrome.storage.local.get('snapshots');
+    const seriesMap = new Map(allSeries.map(s => [s.id, s]));
+    const now = new Date();
+    const upcoming = [];
+    Object.entries(snapshots).forEach(([key, snapshot]) => {
+        const seriesId = key.slice(0, key.lastIndexOf('_'));
+        const series = seriesMap.get(seriesId);
+        if (!series || !snapshot.items)
+            return;
+        snapshot.items.forEach(item => {
+            if (item.availability !== 'preorder')
+                return;
+            if (!item.releaseDate)
+                return;
+            if (!matchesSeriesName(item.title, series.title))
+                return;
+            const releaseDate = new Date(item.releaseDate);
+            if (isNaN(releaseDate.getTime()))
+                return;
+            const daysUntilRelease = Math.ceil((releaseDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            // A pre-order that's already "released" per its date just hasn't flipped to
+            // available in a search result yet - drop it once it's more than a couple
+            // days stale rather than showing permanently-overdue noise.
+            if (daysUntilRelease < -2)
+                return;
+            upcoming.push({
+                seriesId: series.id,
+                seriesTitle: series.title,
+                bookTitle: item.title,
+                bookNumber: item.bookNumber,
+                releaseDate: item.releaseDate,
+                releaseDateRaw: item.releaseDateRaw || item.releaseDate,
+                daysUntilRelease,
+                url: item.url
+            });
+        });
+    });
+    upcoming.sort((a, b) => a.daysUntilRelease - b.daysUntilRelease);
+    // De-dupe the same book appearing more than once (e.g. re-scraped under a
+    // slightly different ASIN before it's confirmed as the same release).
+    const seen = new Set();
+    return upcoming.filter(release => {
+        const key = `${release.seriesId}_${release.bookTitle}`;
+        if (seen.has(key))
+            return false;
+        seen.add(key);
+        return true;
+    });
+}
+/**
+ * Load and display the Upcoming Books tab
+ */
+async function loadUpcomingBooks() {
+    const releases = await getUpcomingReleases();
     const upcomingList = document.getElementById('upcomingReleasesList');
     const noUpcoming = document.getElementById('noUpcoming');
-    if (stats.upcomingReleases.length === 0) {
+    if (releases.length === 0) {
         upcomingList.style.display = 'none';
         noUpcoming.style.display = 'block';
+        return;
     }
-    else {
-        upcomingList.style.display = 'flex';
-        noUpcoming.style.display = 'none';
-        upcomingList.innerHTML = '';
-        stats.upcomingReleases.slice(0, 10).forEach(release => {
-            const item = document.createElement('div');
-            item.className = 'release-item';
-            const badgeClass = release.daysUntilRelease < 7 ? 'soon' :
-                release.daysUntilRelease < 0 ? 'past' : 'future';
-            const daysText = release.daysUntilRelease < 0
-                ? `${Math.abs(release.daysUntilRelease)} days ago`
-                : release.daysUntilRelease === 0
-                    ? 'Today!'
-                    : `In ${release.daysUntilRelease} days`;
-            item.innerHTML = `
-        <div class="release-info">
-          <div class="release-title">${escapeHtml(release.bookTitle)}</div>
-          <div class="release-meta">${escapeHtml(release.seriesTitle)} ${release.bookNumber ? `• Book ${release.bookNumber}` : ''}</div>
-        </div>
-        <div class="release-date">
-          <div class="days-badge ${badgeClass}">${daysText}</div>
-          <div style="font-size: 12px; color: var(--color-gray);">${release.releaseDateRaw}</div>
-        </div>
-      `;
-            upcomingList.appendChild(item);
-        });
-    }
-    // Update types breakdown
-    const updateTypesList = document.getElementById('updateTypesList');
-    updateTypesList.innerHTML = '';
-    Object.entries(stats.updatesByType).forEach(([type, count]) => {
-        const card = document.createElement('div');
-        card.className = 'update-type-card';
-        card.innerHTML = `
-      <div class="update-type-count">${count}</div>
-      <div class="update-type-label">${type.replace(/_/g, ' ')}</div>
+    upcomingList.style.display = 'flex';
+    noUpcoming.style.display = 'none';
+    upcomingList.innerHTML = '';
+    releases.forEach(release => {
+        const item = document.createElement('div');
+        item.className = 'release-item';
+        const badgeClass = release.daysUntilRelease <= 0 ? 'past' :
+            release.daysUntilRelease < 14 ? 'soon' : 'future';
+        const daysText = release.daysUntilRelease <= 0
+            ? 'Releasing any day'
+            : release.daysUntilRelease === 1
+                ? 'Tomorrow'
+                : `In ${release.daysUntilRelease} days`;
+        item.innerHTML = `
+      <div class="release-info">
+        <div class="release-title">${escapeHtml(release.bookTitle)}</div>
+        <div class="release-meta">${escapeHtml(release.seriesTitle)} ${release.bookNumber ? `• Book ${release.bookNumber}` : ''}</div>
+      </div>
+      <div class="release-date">
+        <div class="days-badge ${badgeClass}">${daysText}</div>
+        <div style="font-size: 12px; color: var(--color-gray);">${escapeHtml(release.releaseDateRaw || '')}</div>
+      </div>
     `;
-        updateTypesList.appendChild(card);
+        const link = document.createElement('a');
+        link.href = release.url;
+        link.target = '_blank';
+        link.className = 'btn-card';
+        link.style.marginLeft = '12px';
+        link.textContent = 'View';
+        item.appendChild(link);
+        upcomingList.appendChild(item);
     });
 }
 /**

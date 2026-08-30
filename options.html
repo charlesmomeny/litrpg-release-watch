@@ -25,12 +25,12 @@
           </svg>
           <span>Series</span>
         </button>
-        <button class="nav-item" data-tab="statistics">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 3v18h18"/>
-            <path d="M18 17V9m-5 8V5m-5 12v-3"/>
+        <button class="nav-item" data-tab="upcoming">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <path d="M16 2v4M8 2v4M3 10h18"/>
           </svg>
-          <span>Statistics</span>
+          <span>Upcoming Books</span>
         </button>
         <button class="nav-item" data-tab="settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -87,14 +87,14 @@
         </div>
       </div>
 
-      <!-- Statistics Tab -->
-      <div id="statisticsTab" class="tab-content">
+      <!-- Upcoming Books Tab -->
+      <div id="upcomingTab" class="tab-content">
         <header class="page-header">
           <div>
-            <h2 class="page-title">Statistics</h2>
-            <p class="page-subtitle">Overview of your tracked series and updates</p>
+            <h2 class="page-title">Upcoming Books</h2>
+            <p class="page-subtitle">Release dates Audible has listed on pre-order pages for your tracked series</p>
           </div>
-          <button id="refreshStatsBtn" class="btn-secondary">
+          <button id="refreshUpcomingBtn" class="btn-secondary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               <path d="M9 12l2 2 4-4"/>
@@ -103,77 +103,15 @@
           </button>
         </header>
 
-        <div class="stats-grid">
-          <!-- Overview Cards -->
-          <div class="stat-card">
-            <div class="stat-icon" style="background: #fef3c7; color: #d97706;">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value" id="totalSeriesStat">0</div>
-              <div class="stat-label">Total Series</div>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon" style="background: #d1fae5; color: #059669;">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-                <path d="M22 4L12 14.01l-3-3"/>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value" id="activeSeriesStat">0</div>
-              <div class="stat-label">Active Series</div>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon" style="background: #dbeafe; color: #2563eb;">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/>
-                <path d="M6 1v3m8-3v3"/>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value" id="totalUpdatesStat">0</div>
-              <div class="stat-label">Total Updates</div>
-            </div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-icon" style="background: #fee2e2; color: #dc2626;">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 6v6l4 2"/>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value" id="unreadUpdatesStat">0</div>
-              <div class="stat-label">Unread Updates</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Upcoming Releases -->
         <section class="stats-section">
-          <h3 class="section-title">Upcoming Releases</h3>
           <div id="upcomingReleasesList" class="releases-list">
             <!-- Releases will be inserted here -->
           </div>
           <div id="noUpcoming" class="empty-state-small" style="display: none;">
-            <p>No upcoming releases found</p>
-          </div>
-        </section>
-
-        <!-- Update Types Breakdown -->
-        <section class="stats-section">
-          <h3 class="section-title">Updates by Type</h3>
-          <div id="updateTypesList" class="update-types-grid">
-            <!-- Update types will be inserted here -->
+            <p>No upcoming pre-orders found yet</p>
+            <p style="color: var(--color-gray); font-size: 13px; margin-top: 4px;">
+              This fills in automatically once Audible lists a pre-order (with a release date) for one of your tracked series.
+            </p>
           </div>
         </section>
       </div>

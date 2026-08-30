@@ -673,60 +673,7 @@ body {
   }
 }
 
-/* Statistics Dashboard */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--space-lg);
-  margin-bottom: var(--space-2xl);
-}
-
-.stat-card {
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-xl);
-  display: flex;
-  align-items: center;
-  gap: var(--space-lg);
-  transition: all 0.15s ease;
-}
-
-.stat-card:hover {
-  border-color: var(--color-gray-light);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
-}
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.stat-content {
-  flex: 1;
-}
-
-.stat-value {
-  font-family: var(--font-serif);
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--color-navy);
-  line-height: 1;
-  margin-bottom: var(--space-xs);
-}
-
-.stat-label {
-  font-size: 13px;
-  color: var(--color-gray);
-  font-weight: 500;
-}
-
+/* Upcoming Books */
 .stats-section {
   background: var(--color-white);
   border: 1px solid var(--color-border);
@@ -798,33 +745,6 @@ body {
 .days-badge.past {
   background: var(--color-gray-light);
   color: var(--color-slate);
-}
-
-.update-types-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--space-md);
-}
-
-.update-type-card {
-  padding: var(--space-md);
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
-  text-align: center;
-}
-
-.update-type-count {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--color-navy);
-  margin-bottom: var(--space-xs);
-}
-
-.update-type-label {
-  font-size: 12px;
-  color: var(--color-gray);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .empty-state-small {

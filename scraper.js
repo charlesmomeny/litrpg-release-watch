@@ -4,6 +4,7 @@
  */
 import { AudibleParser } from './parsers/audible.js';
 import { AmazonParser } from './parsers/amazon.js';
+import { normalizeDate } from './utils.js';
 export class Scraper {
     /**
      * Scrape Audible search results
@@ -309,6 +310,17 @@ export class Scraper {
             // Close tab
             await chrome.tabs.remove(tabId);
             tabId = null;
+            if (result?.items) {
+                // The injected page-context function can't import utils.js, so it only
+                // extracts the raw "Release date: 03-03-26" text. Normalize it here, back
+                // in the extension's own context, so releaseDate is an actual comparable
+                // date instead of an unparsed string (needed for the Upcoming Books view).
+                result.items.forEach(item => {
+                    if (!item.releaseDate || item.releaseDate === item.releaseDateRaw) {
+                        item.releaseDate = normalizeDate(item.releaseDateRaw) || null;
+                    }
+                });
+            }
             return result || { items: [], error: 'No data extracted' };
         }
         catch (e) {

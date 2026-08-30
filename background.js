@@ -5,6 +5,7 @@ import { StorageManager } from './storage.js';
 import { Scraper } from './scraper.js';
 import { DiffEngine } from './diff.js';
 import { NotificationManager } from './notifications.js';
+import { matchesSeriesName } from './utils.js';
 // CRITICAL: Make modules globally accessible for debugging and checks
 globalThis.StorageManager = StorageManager;
 globalThis.Scraper = Scraper;
@@ -344,56 +345,12 @@ async function updateSeriesMetadataFromBothSources(seriesId, timestamp) {
         return;
     // Get snapshot from Audible only
     const audibleSnapshot = await StorageManager.getSnapshot(seriesId, 'audible');
-    // Helper: Check if book title matches series name AND is an audiobook (filters search pollution)
-    const matchesSeriesName = (itemTitle) => {
-        const title = itemTitle.toLowerCase();
-        const seriesName = series.title.toLowerCase();
-        // FILTER 1: Must match series name (FUZZY match)
-        let matchesSeries = false;
-        // Normalize for comparison
-        const normalizeForMatch = (str) => {
-            return str
-                .replace(/^the\s+/i, '')
-                .replace(/[^\w\s]/g, ' ')
-                .replace(/s\b/g, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-        };
-        const normalizedSeries = normalizeForMatch(seriesName);
-        const normalizedTitle = normalizeForMatch(title);
-        if (normalizedTitle.includes(normalizedSeries)) {
-            matchesSeries = true;
-        }
-        // Basic match
-        if (title.includes(seriesName)) {
-            matchesSeries = true;
-        }
-        // Try without "The" prefix
-        const seriesNameNoThe = seriesName.replace(/^the\s+/, '');
-        if (seriesNameNoThe !== seriesName && title.includes(seriesNameNoThe)) {
-            matchesSeries = true;
-        }
-        if (!matchesSeries)
-            return false;
-        // FILTER 2: AUDIOBOOKS ONLY - Exclude variants/merchandise
-        const pollutionKeywords = [
-            'graphic novel', 'light novel', 'manga', 'vol.', 'volume 1', 'volume 2', 'volume 3',
-            'french edition', 'german edition', 'spanish edition', 'édition française', 'édition',
-            'dramatized adaptation', 'dramatized audio', 'full cast', 'full-cast', 'radio play',
-            'bookmark', 'shirt', 't-shirt', 'tshirt', 'poster', 'print', 'merch',
-            'mug', 'tumbler', 'cup', 'sticker', 'decal', 'sign', 'metal', 'vinyl', 'canvas', 'artwork',
-            '[dvd]', '[blu-ray]', 'dvd', 'blu-ray', 'bluray', 'movie', 'film', 'renewed',
-            'gift', 'gifts', 'notebook', 'journal', 'calendar'
-        ];
-        const isPollution = pollutionKeywords.some(keyword => title.includes(keyword));
-        return !isPollution;
-    };
     // Extract book numbers from AUDIO books (Audible) - AVAILABLE ONLY + MATCHING NAME
     const audioBookNumbers = [];
     if (audibleSnapshot) {
         for (const item of audibleSnapshot.items) {
             // CRITICAL: Only count books that match series name AND are available
-            if (matchesSeriesName(item.title) && item.availability === 'available') {
+            if (matchesSeriesName(item.title, series.title) && item.availability === 'available') {
                 const num = extractBookNumber(item);
                 if (num)
                     audioBookNumbers.push(num);
