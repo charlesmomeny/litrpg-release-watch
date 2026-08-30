@@ -267,6 +267,14 @@
 
             <div class="setting-row">
               <div class="setting-label">
+                <label for="maxBookAgeDays">Max Book Age (days)</label>
+                <p class="setting-description">Ignore "new" books whose release date is older than this many days (catches backlog titles Audible resurfaces in search). Set to 0 to disable this filter.</p>
+              </div>
+              <input type="number" id="maxBookAgeDays" class="input" min="0" max="3650" step="30">
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-label">
                 <label for="trackPriceChanges">Track Price Changes</label>
                 <p class="setting-description">Get notified when prices change (experimental)</p>
               </div>
@@ -452,6 +460,12 @@
           <label for="amazonUrl" class="form-label">Amazon Series URL</label>
           <input type="url" id="amazonUrl" class="form-input" placeholder="https://www.amazon.com/...">
           <p class="form-help">Paste the URL from Amazon series page</p>
+        </div>
+
+        <div class="form-group">
+          <label for="expectedAuthor" class="form-label">Expected Author(s)</label>
+          <input type="text" id="expectedAuthor" class="form-input" placeholder="e.g., Zogarth (comma-separate co-authors)">
+          <p class="form-help">Strongly recommended. Locks new-book detection to this author so search-result pollution from other series can't be mistaken for (or block) a real new release. Click "Test URLs" below to auto-suggest one from your search results.</p>
         </div>
 
         <div class="form-group">

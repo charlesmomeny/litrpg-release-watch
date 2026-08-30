@@ -1113,6 +1113,24 @@ body {
   animation: pulse 2s infinite;
 }
 
+/* Warning badge for series whose last check had rejected candidates - click to open Audit Log */
+.audit-warning-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #fde68a;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+.audit-warning-badge:hover {
+  background: #fcd34d;
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;

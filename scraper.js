@@ -198,9 +198,44 @@ export class Scraper {
                         }
                         return null;
                     }
+                    // Detect bot-detection/CAPTCHA pages (copied from parsers/audible.js)
+                    function isBlockedPage() {
+                        const indicators = [
+                            "sorry, we just need to make sure you're not a robot",
+                            'type the characters you see in this image',
+                            'enter the characters you see below',
+                            'captcha'
+                        ];
+                        const bodyText = document.body?.textContent?.toLowerCase() || '';
+                        return indicators.some(indicator => bodyText.includes(indicator));
+                    }
+                    // Find product containers using multiple fallback strategies, in case
+                    // Audible's markup shifts and the primary selector stops matching
+                    // (copied from parsers/audible.js findProductContainers)
+                    function findAudibleContainers(max) {
+                        const strategies = [
+                            () => document.querySelectorAll('li.productListItem'),
+                            () => document.querySelectorAll('.productListItem'),
+                            () => document.querySelectorAll('li[data-asin]'),
+                            () => document.querySelectorAll('.center-column li.bc-list-item'),
+                            () => document.querySelectorAll('li[class*="product"]'),
+                        ];
+                        for (const strategy of strategies) {
+                            const found = strategy();
+                            // Filter out navigation/category noise - a real search results
+                            // page should have somewhere between 1 and ~100 results.
+                            if (found.length > 0 && found.length < 100) {
+                                return found;
+                            }
+                        }
+                        return [];
+                    }
                     if (source === 'audible') {
+                        if (isBlockedPage()) {
+                            return { items: [], error: 'Bot detection / CAPTCHA encountered' };
+                        }
                         const items = [];
-                        const containers = document.querySelectorAll('li.productListItem');
+                        const containers = findAudibleContainers(maxResults);
                         for (let i = 0; i < Math.min(containers.length, maxResults); i++) {
                             const container = containers[i];
                             // Extract title and URL

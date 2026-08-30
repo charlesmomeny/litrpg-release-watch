@@ -30,6 +30,7 @@ const quietHoursStart = document.getElementById('quietHoursStart');
 const quietHoursEnd = document.getElementById('quietHoursEnd');
 const quietHoursSettings = document.getElementById('quietHoursSettings');
 const dateShiftThreshold = document.getElementById('dateShiftThreshold');
+const maxBookAgeDaysInput = document.getElementById('maxBookAgeDays');
 const trackPriceChanges = document.getElementById('trackPriceChanges');
 const fallbackScrapeEnabled = document.getElementById('fallbackScrapeEnabled');
 const ignorePreorders = document.getElementById('ignorePreorders');
@@ -164,6 +165,17 @@ async function createSeriesCard(series, lastCheckTime) {
     const alertBadge = hasUnacknowledgedUpdates
         ? `<span class="alert-badge" title="New updates available!">🔔 ${seriesUpdates.filter((u) => !u.acknowledged).length}</span>`
         : '';
+    // Surface the most recent audit check's rejections directly on the card, so a
+    // book that was scraped but filtered out (wrong author, title mismatch, too old,
+    // etc.) doesn't require digging through the Audit Log tab to notice.
+    const seriesAuditLog = await StorageManager.getAuditLog(series.id);
+    const latestAudit = seriesAuditLog[0];
+    const latestRejectionCount = latestAudit
+        ? Object.values(latestAudit.rejectionReasons || {}).reduce((sum, c) => sum + c, 0)
+        : 0;
+    const auditWarningBadge = latestRejectionCount > 0
+        ? `<span class="audit-warning-badge" title="Last check rejected ${latestRejectionCount} candidate(s): ${escapeHtml(Object.entries(latestAudit.rejectionReasons).map(([r, c]) => `${r.replace(/_/g, ' ')} (${c})`).join(', '))}. Click to view in Audit Log.">⚠️ ${latestRejectionCount} rejected</span>`
+        : '';
     // Build next book display (audio + text)
     const nextAudio = series.nextAudioBook;
     const nextText = series.nextTextBook;
@@ -188,7 +200,7 @@ async function createSeriesCard(series, lastCheckTime) {
     card.className = `series-card ${alertClass}`;
     card.innerHTML = `
     <div class="series-card-header">
-      <h3 class="series-card-title">${escapeHtml(series.title)} ${alertBadge}</h3>
+      <h3 class="series-card-title">${escapeHtml(series.title)} ${alertBadge} ${auditWarningBadge}</h3>
       <div class="series-card-meta">
         <span>${sources.join(', ') || 'No sources'}</span>
         ${bookCount > 0 ? `<span>•</span><span>${bookCount} books found</span>` : ''}
@@ -226,6 +238,7 @@ async function createSeriesCard(series, lastCheckTime) {
     card.querySelector('.check-btn')?.addEventListener('click', () => checkSeries(series.id));
     card.querySelector('.ack-btn')?.addEventListener('click', () => acknowledgeSeriesUpdates(series.id));
     card.querySelector('.delete-btn')?.addEventListener('click', () => deleteSeries(series.id));
+    card.querySelector('.audit-warning-badge')?.addEventListener('click', () => jumpToAuditLog(series.id));
     return card;
 }
 /**
@@ -244,6 +257,9 @@ function openSeriesModal(series) {
         document.getElementById('completionStatus').value = series.completionStatus || 'unknown';
         document.getElementById('audibleUrl').value = series.audibleSearchUrl || '';
         document.getElementById('amazonUrl').value = series.amazonSeriesUrl || '';
+        document.getElementById('expectedAuthor').value = Array.isArray(series.expectedAuthor)
+            ? series.expectedAuthor.join(', ')
+            : (series.expectedAuthor || '');
         document.getElementById('seriesNotes').value = series.notes || '';
         document.getElementById('seriesEnabled').checked = series.enabled;
         // Show preview button if editing existing series
@@ -274,6 +290,7 @@ async function handleSeriesSubmit(e) {
     const completionStatus = document.getElementById('completionStatus').value;
     const audibleUrl = document.getElementById('audibleUrl').value.trim();
     const amazonUrl = document.getElementById('amazonUrl').value.trim();
+    const expectedAuthorRaw = document.getElementById('expectedAuthor').value.trim();
     const notes = document.getElementById('seriesNotes').value;
     const enabled = document.getElementById('seriesEnabled').checked;
     // Check if URLs were provided but not tested
@@ -286,21 +303,41 @@ async function handleSeriesSubmit(e) {
             return;
         }
     }
-    const seriesData = {
+    // When editing, merge onto the existing stored record instead of replacing it
+    // wholesale - StorageManager.saveSeries() does not merge with old data itself,
+    // so building seriesData from only the form fields would silently wipe out
+    // fields the form doesn't know about (nextAudioBook, lastNotifiedAt, createdAt, etc).
+    let seriesData = editingSeriesId
+        ? { ...(await StorageManager.getSeries(editingSeriesId)) }
+        : {};
+    Object.assign(seriesData, {
         title,
         nextInstallment: nextInstallment || '1',
         completionStatus,
         enabled
-    };
+    });
     if (editingSeriesId) {
         seriesData.id = editingSeriesId;
     }
     if (audibleUrl)
         seriesData.audibleSearchUrl = audibleUrl;
+    else
+        delete seriesData.audibleSearchUrl;
     if (amazonUrl)
         seriesData.amazonSeriesUrl = amazonUrl;
+    else
+        delete seriesData.amazonSeriesUrl;
     if (notes)
         seriesData.notes = notes;
+    else
+        delete seriesData.notes;
+    if (expectedAuthorRaw) {
+        const authors = expectedAuthorRaw.split(',').map(a => a.trim()).filter(Boolean);
+        seriesData.expectedAuthor = authors.length > 1 ? authors : authors[0];
+    }
+    else {
+        delete seriesData.expectedAuthor;
+    }
     await StorageManager.saveSeries(seriesData);
     closeSeriesModal();
     await loadSeries();
@@ -345,6 +382,7 @@ async function loadSettings() {
     quietHoursStart.value = settings.quietHoursStart;
     quietHoursEnd.value = settings.quietHoursEnd;
     dateShiftThreshold.value = settings.dateShiftThreshold.toString();
+    maxBookAgeDaysInput.value = settings.maxBookAgeDays.toString();
     trackPriceChanges.checked = settings.trackPriceChanges;
     fallbackScrapeEnabled.checked = settings.fallbackScrapeEnabled;
     ignorePreorders.checked = settings.ignorePreorders;
@@ -363,6 +401,7 @@ async function saveSettings() {
         quietHoursStart: quietHoursStart.value,
         quietHoursEnd: quietHoursEnd.value,
         dateShiftThreshold: parseInt(dateShiftThreshold.value),
+        maxBookAgeDays: parseInt(maxBookAgeDaysInput.value),
         trackPriceChanges: trackPriceChanges.checked,
         fallbackScrapeEnabled: fallbackScrapeEnabled.checked,
         ignorePreorders: ignorePreorders.checked
@@ -700,6 +739,15 @@ function displayValidationResults(results) {
                 html += `<div class="validation-book-item" style="font-style: italic; opacity: 0.7;">...and ${results.audible.itemCount - 5} more</div>`;
             }
             html += `</div>`;
+            const suggestedAuthor = computeDominantAuthor(results.audible.items);
+            if (suggestedAuthor) {
+                html += `
+          <div class="validation-author-suggestion" style="margin-top:10px; padding:8px 10px; background:#eff6ff; border-left:3px solid #3b82f6; border-radius:3px; font-size:13px;">
+            💡 Suggested author lock: <strong>${escapeHtml(suggestedAuthor)}</strong>
+            <button type="button" class="btn-card use-author-suggestion-btn" data-author="${escapeHtml(suggestedAuthor)}" style="margin-left:8px;">Use this</button>
+          </div>
+        `;
+            }
         }
         else {
             html += `
@@ -785,6 +833,31 @@ function displayValidationResults(results) {
     }
     validationResults.innerHTML = html;
     validationResults.style.display = 'block';
+    validationResults.querySelector('.use-author-suggestion-btn')?.addEventListener('click', (evt) => {
+        document.getElementById('expectedAuthor').value = evt.currentTarget.dataset.author;
+    });
+}
+/**
+ * Pick the author that appears on a clear majority (>=50%) of scraped items with
+ * an author field, to suggest as the series' expectedAuthor lock. Returns null if
+ * there's no author data or no clear majority (e.g. mixed/co-authored results).
+ */
+function computeDominantAuthor(items) {
+    const counts = {};
+    let totalWithAuthor = 0;
+    items.forEach(item => {
+        const author = item.author?.trim();
+        if (!author)
+            return;
+        counts[author] = (counts[author] || 0) + 1;
+        totalWithAuthor++;
+    });
+    const entries = Object.entries(counts);
+    if (entries.length === 0)
+        return null;
+    entries.sort((a, b) => b[1] - a[1]);
+    const [topAuthor, topCount] = entries[0];
+    return topCount / totalWithAuthor >= 0.5 ? topAuthor : null;
 }
 /**
  * Generate suggestions based on error
@@ -871,6 +944,27 @@ function setupAuditUI() {
     refreshBtn.addEventListener('click', renderAuditLog);
     seriesFilter.addEventListener('change', renderAuditLog);
     viewMode.addEventListener('change', renderAuditLog);
+}
+
+/**
+ * Switch to the Audit Log tab, filtered to one series showing its rejections.
+ * Used by the "⚠️ N rejected" badge on a series card.
+ */
+async function jumpToAuditLog(seriesId) {
+    navItems.forEach(nav => nav.classList.remove('active'));
+    document.querySelector('.nav-item[data-tab="audit"]')?.classList.add('active');
+    tabContents.forEach(tab => tab.classList.remove('active'));
+    document.getElementById('auditTab')?.classList.add('active');
+    // renderAuditLog() populates the series filter dropdown on first run, so call it
+    // once to ensure the option we're about to select actually exists.
+    await renderAuditLog();
+    const seriesFilterEl = document.getElementById('auditSeriesFilter');
+    const viewModeEl = document.getElementById('auditViewMode');
+    if (seriesFilterEl)
+        seriesFilterEl.value = seriesId;
+    if (viewModeEl)
+        viewModeEl.value = 'rejections';
+    await renderAuditLog();
 }
 
 async function renderAuditLog() {
