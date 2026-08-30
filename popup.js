@@ -4,11 +4,15 @@
 import { StorageManager } from './storage.js';
 import { DiffEngine } from './diff.js';
 import { formatTimestamp } from './utils.js';
+import { getUpcomingReleases } from './upcoming.js';
 // DOM Elements
 const loadingState = document.getElementById('loadingState');
 const updatesSection = document.getElementById('updatesSection');
 const updatesList = document.getElementById('updatesList');
 const noUpdates = document.getElementById('noUpdates');
+const upcomingSection = document.getElementById('upcomingSection');
+const upcomingList = document.getElementById('upcomingList');
+const noUpcoming = document.getElementById('noUpcoming');
 const checkNowBtn = document.getElementById('checkNowBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const markAllReadBtn = document.getElementById('markAllReadBtn');
@@ -23,7 +27,10 @@ document.addEventListener('DOMContentLoaded', async () => {
  */
 async function loadData() {
     try {
-        await loadUpdates();
+        await Promise.all([
+            loadUpdates(),
+            loadUpcoming()
+        ]);
     }
     catch (e) {
         console.error('Error loading data:', e);
@@ -103,6 +110,55 @@ function createUpdateElement(update) {
     return div;
 }
 /**
+ * Load and display upcoming pre-order releases
+ */
+async function loadUpcoming() {
+    const releases = await getUpcomingReleases();
+    if (releases.length === 0) {
+        upcomingList.style.display = 'none';
+        noUpcoming.style.display = 'block';
+        return;
+    }
+    upcomingList.style.display = 'block';
+    noUpcoming.style.display = 'none';
+    upcomingList.innerHTML = '';
+    // Keep the popup short - the full list is one click away via "View all"
+    releases.slice(0, 5).forEach(release => {
+        upcomingList.appendChild(createUpcomingElement(release));
+    });
+}
+/**
+ * Create an upcoming-release element
+ */
+function createUpcomingElement(release) {
+    const div = document.createElement('div');
+    div.className = 'upcoming-item';
+    const badgeClass = release.daysUntilRelease <= 0 ? 'soon' :
+        release.daysUntilRelease < 14 ? 'soon' : 'future';
+    const daysText = release.daysUntilRelease <= 0
+        ? 'Releasing any day'
+        : release.daysUntilRelease === 1
+            ? 'Tomorrow'
+            : `In ${release.daysUntilRelease} days`;
+    const narratorWarning = release.narratorMismatch
+        ? '<span class="upcoming-warning" title="Narrator differs from previous books in this series - double-check this one">⚠️</span>'
+        : '';
+    div.innerHTML = `
+    <div class="upcoming-info">
+      <div class="upcoming-title">${escapeHtml(release.bookTitle)} ${narratorWarning}</div>
+      <div class="upcoming-series">${escapeHtml(release.seriesTitle)} ${release.bookNumber ? `• Book ${release.bookNumber}` : ''}</div>
+    </div>
+    <div class="upcoming-date">
+      <div class="upcoming-days-badge ${badgeClass}">${daysText}</div>
+      <div class="upcoming-date-text">${escapeHtml(release.releaseDateRaw || '')}</div>
+    </div>
+  `;
+    div.addEventListener('click', () => {
+        chrome.tabs.create({ url: release.url });
+    });
+    return div;
+}
+/**
  * Mark update as read
  */
 async function markUpdateRead(updateId) {
@@ -120,6 +176,7 @@ function setupEventListeners() {
         checkNowBtn.disabled = true;
         // Show loading state
         updatesSection.style.display = 'none';
+        upcomingSection.style.display = 'none';
         loadingState.style.display = 'flex';
         // Trigger check
         await chrome.runtime.sendMessage({ action: 'checkNow' });
@@ -129,6 +186,7 @@ function setupEventListeners() {
             // Hide loading state
             loadingState.style.display = 'none';
             updatesSection.style.display = 'block';
+            upcomingSection.style.display = 'block';
             checkNowBtn.disabled = false;
         }, 2000);
     });

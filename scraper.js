@@ -199,6 +199,24 @@ export class Scraper {
                         }
                         return null;
                     }
+                    // Extract narrator (copied from parsers/audible.js extractNarrator)
+                    function extractNarrator(container) {
+                        const selectors = [
+                            '.narratorLabel',
+                            '.bc-size-small a[href*="/narrator/"]',
+                            '[class*="narrator"]'
+                        ];
+                        for (const selector of selectors) {
+                            const elements = Array.from(container.querySelectorAll(selector));
+                            for (const element of elements) {
+                                const text = element.textContent?.trim() || '';
+                                if (text && text.length > 0 && text.length < 100) {
+                                    return text.replace(/^(?:narrated by|by)[:\s]*/i, '').trim();
+                                }
+                            }
+                        }
+                        return null;
+                    }
                     // Detect bot-detection/CAPTCHA pages (copied from parsers/audible.js)
                     function isBlockedPage() {
                         const indicators = [
@@ -249,6 +267,8 @@ export class Scraper {
                             const bookNumber = extractBookNumber(title);
                             // Extract author
                             const author = extractAuthor(container);
+                            // Extract narrator
+                            const narrator = extractNarrator(container);
                             // Extract release date (e.g., "Release date: 03-03-26")
                             let releaseDateRaw = null;
                             const containerText = container.textContent || '';
@@ -276,7 +296,8 @@ export class Scraper {
                                 availability,
                                 source: 'audible',
                                 bookNumber,
-                                author: author || undefined
+                                author: author || undefined,
+                                narrator: narrator || undefined
                             });
                         }
                         return { items };

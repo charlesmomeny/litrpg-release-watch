@@ -2,7 +2,8 @@
  * Options page logic
  */
 import { StorageManager } from './storage.js';
-import { formatTimestamp, matchesSeriesName } from './utils.js';
+import { formatTimestamp } from './utils.js';
+import { getUpcomingReleases } from './upcoming.js';
 // Current editing series ID (null for new)
 let editingSeriesId = null;
 // DOM Elements
@@ -53,6 +54,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSeries();
     await loadSettings();
     await loadUpcomingBooks();
+    // Deep-link support (e.g. the popup's "View all" upcoming-releases link)
+    const requestedTab = location.hash.replace('#', '');
+    if (requestedTab) {
+        document.querySelector(`.nav-item[data-tab="${requestedTab}"]`)?.click();
+    }
 });
 /**
  * Setup navigation
@@ -447,63 +453,6 @@ async function importData() {
  * Load and display statistics
  */
 /**
- * Scan every series' latest Audible snapshot for pre-order items (the only place
- * Audible actually publishes a release date) and build a sorted "what's coming up"
- * list. Only items that pass matchesSeriesName() count, so cross-series search
- * pollution never shows up here as a false "upcoming" release.
- */
-async function getUpcomingReleases() {
-    const allSeries = await StorageManager.getAllSeries();
-    const { snapshots = {} } = await chrome.storage.local.get('snapshots');
-    const seriesMap = new Map(allSeries.map(s => [s.id, s]));
-    const now = new Date();
-    const upcoming = [];
-    Object.entries(snapshots).forEach(([key, snapshot]) => {
-        const seriesId = key.slice(0, key.lastIndexOf('_'));
-        const series = seriesMap.get(seriesId);
-        if (!series || !snapshot.items)
-            return;
-        snapshot.items.forEach(item => {
-            if (item.availability !== 'preorder')
-                return;
-            if (!item.releaseDate)
-                return;
-            if (!matchesSeriesName(item.title, series.title))
-                return;
-            const releaseDate = new Date(item.releaseDate);
-            if (isNaN(releaseDate.getTime()))
-                return;
-            const daysUntilRelease = Math.ceil((releaseDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            // A pre-order that's already "released" per its date just hasn't flipped to
-            // available in a search result yet - drop it once it's more than a couple
-            // days stale rather than showing permanently-overdue noise.
-            if (daysUntilRelease < -2)
-                return;
-            upcoming.push({
-                seriesId: series.id,
-                seriesTitle: series.title,
-                bookTitle: item.title,
-                bookNumber: item.bookNumber,
-                releaseDate: item.releaseDate,
-                releaseDateRaw: item.releaseDateRaw || item.releaseDate,
-                daysUntilRelease,
-                url: item.url
-            });
-        });
-    });
-    upcoming.sort((a, b) => a.daysUntilRelease - b.daysUntilRelease);
-    // De-dupe the same book appearing more than once (e.g. re-scraped under a
-    // slightly different ASIN before it's confirmed as the same release).
-    const seen = new Set();
-    return upcoming.filter(release => {
-        const key = `${release.seriesId}_${release.bookTitle}`;
-        if (seen.has(key))
-            return false;
-        seen.add(key);
-        return true;
-    });
-}
-/**
  * Load and display the Upcoming Books tab
  */
 async function loadUpcomingBooks() {
@@ -528,9 +477,12 @@ async function loadUpcomingBooks() {
             : release.daysUntilRelease === 1
                 ? 'Tomorrow'
                 : `In ${release.daysUntilRelease} days`;
+        const narratorWarning = release.narratorMismatch
+            ? `<span class="audit-warning-badge" style="margin-left:8px; cursor:default;" title="Narrator (${escapeHtml(release.narrator || '')}) differs from previous books in this series. Narrators do change sometimes, but double-check this is really the next book before trusting the date.">⚠️ narrator differs</span>`
+            : '';
         item.innerHTML = `
       <div class="release-info">
-        <div class="release-title">${escapeHtml(release.bookTitle)}</div>
+        <div class="release-title">${escapeHtml(release.bookTitle)} ${narratorWarning}</div>
         <div class="release-meta">${escapeHtml(release.seriesTitle)} ${release.bookNumber ? `• Book ${release.bookNumber}` : ''}</div>
       </div>
       <div class="release-date">

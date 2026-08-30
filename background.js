@@ -345,12 +345,17 @@ async function updateSeriesMetadataFromBothSources(seriesId, timestamp) {
         return;
     // Get snapshot from Audible only
     const audibleSnapshot = await StorageManager.getSnapshot(seriesId, 'audible');
-    // Extract book numbers from AUDIO books (Audible) - AVAILABLE ONLY + MATCHING NAME
+    // Extract book numbers from AUDIO books (Audible) - AVAILABLE ONLY + MATCHING NAME + ENGLISH ONLY
     const audioBookNumbers = [];
     if (audibleSnapshot) {
         for (const item of audibleSnapshot.items) {
-            // CRITICAL: Only count books that match series name AND are available
-            if (matchesSeriesName(item.title, series.title) && item.availability === 'available') {
+            // CRITICAL: Only count books that match series name, are available, and
+            // are the English release (foreign-language editions/translations often
+            // reuse the same series name and would otherwise pollute "next book" math).
+            if (matchesSeriesName(item.title, series.title) &&
+                item.availability === 'available' &&
+                !DiffEngine.isLikelyNonEnglish(item.title) &&
+                !DiffEngine.isForeignEditionVariant(item.title)) {
                 const num = extractBookNumber(item);
                 if (num)
                     audioBookNumbers.push(num);
