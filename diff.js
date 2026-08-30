@@ -535,6 +535,16 @@ export class DiffEngine {
         if (italianEndings.test(title)) {
             return true;
         }
+        // Foreign-language grammar words with essentially zero English homographs or
+        // naming collisions. Catches titles like "He Who Fights With Monsters - Die
+        // Stadt der gefallenen Echos" — a translated subtitle tacked onto the English
+        // series name, with no diacritics and no bracketed edition marker to catch it.
+        // (Unlike the article-at-start check above, these are checked anywhere in the
+        // title, since a translated subtitle usually follows a colon or dash.)
+        const foreignStopwords = /\b(der|und|für|eine|einer|nicht|dass|sich|gegen|von|dans|avec|une|delle|senza|gli)\b/i;
+        if (foreignStopwords.test(title)) {
+            return true;
+        }
         return false;
     }
     /**
