@@ -217,12 +217,6 @@ async function createSeriesCard(series, lastCheckTime) {
         <span class="series-info-label">Status</span>
         <span class="series-info-value">${statusBadge}</span>
       </div>
-      ${series.notes ? `
-        <div class="series-info-row">
-          <span class="series-info-label">Notes</span>
-          <span class="series-info-value">${escapeHtml(series.notes)}</span>
-        </div>
-      ` : ''}
     </div>
     <div class="series-card-actions">
       <button class="btn-card edit-btn">Edit</button>
@@ -260,7 +254,6 @@ function openSeriesModal(series) {
         document.getElementById('expectedAuthor').value = Array.isArray(series.expectedAuthor)
             ? series.expectedAuthor.join(', ')
             : (series.expectedAuthor || '');
-        document.getElementById('seriesNotes').value = series.notes || '';
         document.getElementById('seriesEnabled').checked = series.enabled;
         // Show preview button if editing existing series
         previewBooksBtn.style.display = 'inline-flex';
@@ -291,7 +284,6 @@ async function handleSeriesSubmit(e) {
     const audibleUrl = document.getElementById('audibleUrl').value.trim();
     const amazonUrl = document.getElementById('amazonUrl').value.trim();
     const expectedAuthorRaw = document.getElementById('expectedAuthor').value.trim();
-    const notes = document.getElementById('seriesNotes').value;
     const enabled = document.getElementById('seriesEnabled').checked;
     // Check if URLs were provided but not tested
     const hasUrls = audibleUrl || amazonUrl;
@@ -327,10 +319,7 @@ async function handleSeriesSubmit(e) {
         seriesData.amazonSeriesUrl = amazonUrl;
     else
         delete seriesData.amazonSeriesUrl;
-    if (notes)
-        seriesData.notes = notes;
-    else
-        delete seriesData.notes;
+    delete seriesData.notes;
     if (expectedAuthorRaw) {
         const authors = expectedAuthorRaw.split(',').map(a => a.trim()).filter(Boolean);
         seriesData.expectedAuthor = authors.length > 1 ? authors : authors[0];

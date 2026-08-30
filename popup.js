@@ -9,9 +9,6 @@ const loadingState = document.getElementById('loadingState');
 const updatesSection = document.getElementById('updatesSection');
 const updatesList = document.getElementById('updatesList');
 const noUpdates = document.getElementById('noUpdates');
-const seriesSection = document.getElementById('seriesSection');
-const seriesList = document.getElementById('seriesList');
-const noSeries = document.getElementById('noSeries');
 const checkNowBtn = document.getElementById('checkNowBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const markAllReadBtn = document.getElementById('markAllReadBtn');
@@ -26,10 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
  */
 async function loadData() {
     try {
-        await Promise.all([
-            loadUpdates(),
-            loadSeries()
-        ]);
+        await loadUpdates();
     }
     catch (e) {
         console.error('Error loading data:', e);
@@ -109,55 +103,6 @@ function createUpdateElement(update) {
     return div;
 }
 /**
- * Load and display series
- */
-async function loadSeries() {
-    const allSeries = await StorageManager.getAllSeries();
-    if (allSeries.length === 0) {
-        seriesList.style.display = 'none';
-        noSeries.style.display = 'flex';
-        return;
-    }
-    seriesList.style.display = 'block';
-    noSeries.style.display = 'none';
-    // Clear existing
-    seriesList.innerHTML = '';
-    // Sort by title
-    allSeries.sort((a, b) => a.title.localeCompare(b.title));
-    const lastCheck = await chrome.storage.local.get('lastCheck');
-    const lastCheckData = lastCheck.lastCheck || {};
-    allSeries.forEach(series => {
-        seriesList.appendChild(createSeriesElement(series, lastCheckData[series.id]));
-    });
-}
-/**
- * Create series element
- */
-function createSeriesElement(series, lastCheckTime) {
-    const div = document.createElement('div');
-    div.className = `series-item ${series.enabled ? '' : 'disabled'}`;
-    const lastCheckText = lastCheckTime
-        ? `Last check: ${formatTimestamp(lastCheckTime)}`
-        : 'Not checked yet';
-    const sources = [];
-    if (series.audibleSearchUrl)
-        sources.push('Audible');
-    if (series.amazonSeriesUrl)
-        sources.push('Amazon');
-    div.innerHTML = `
-    <div class="series-title">${escapeHtml(series.title)}</div>
-    <div class="series-meta">
-      <div class="series-status">
-        <span class="status-icon ok"></span>
-        <span>${lastCheckText}</span>
-      </div>
-      <span>•</span>
-      <span>${sources.join(', ')}</span>
-    </div>
-  `;
-    return div;
-}
-/**
  * Mark update as read
  */
 async function markUpdateRead(updateId) {
@@ -175,7 +120,6 @@ function setupEventListeners() {
         checkNowBtn.disabled = true;
         // Show loading state
         updatesSection.style.display = 'none';
-        seriesSection.style.display = 'none';
         loadingState.style.display = 'flex';
         // Trigger check
         await chrome.runtime.sendMessage({ action: 'checkNow' });
@@ -185,7 +129,6 @@ function setupEventListeners() {
             // Hide loading state
             loadingState.style.display = 'none';
             updatesSection.style.display = 'block';
-            seriesSection.style.display = 'block';
             checkNowBtn.disabled = false;
         }, 2000);
     });

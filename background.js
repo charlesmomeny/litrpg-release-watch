@@ -458,8 +458,7 @@ async function detectSeriesCompletion(seriesId, snapshot) {
         // Update series to mark as complete
         await StorageManager.saveSeries({
             ...series,
-            completionStatus: 'complete',
-            notes: series.notes ? `${series.notes} (Auto-detected: Final book found)` : 'Auto-detected: Final book found'
+            completionStatus: 'complete'
         });
         console.log(`Series "${series.title}" marked as complete (final book detected)`);
     }
