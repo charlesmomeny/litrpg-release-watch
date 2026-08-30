@@ -1,7 +1,7 @@
 /**
  * Storage manager for chrome.storage.local
  */
-import { generateId } from './utils.js';
+import { generateId, extractAsin } from './utils.js';
 const DEFAULT_SETTINGS = {
     pollInterval: 12,
     quietHoursEnabled: false,
@@ -146,19 +146,13 @@ export class StorageManager {
      * Book history - track every unique ASIN we've ever seen.
      * Used for "when did this book first appear in search results?" investigations.
      */
-    static extractAsin(url) {
-        if (!url)
-            return null;
-        const match = url.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);
-        return match ? match[1] : null;
-    }
     static async recordBooksSeen(items, seriesId) {
         if (!items || items.length === 0)
             return;
         const { bookHistory = {} } = await chrome.storage.local.get('bookHistory');
         const now = Date.now();
         items.forEach(book => {
-            const asin = this.extractAsin(book.url);
+            const asin = extractAsin(book.url);
             if (!asin)
                 return;
             const existing = bookHistory[asin];

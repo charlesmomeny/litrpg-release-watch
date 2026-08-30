@@ -108,10 +108,12 @@ export class Scraper {
                     error: 'Fallback mode requires tabs and scripting permissions'
                 };
             }
-            // Create inactive tab
+            // Create inactive tab in a hidden, unfocused window so the user never sees it
+            const windowId = await this.getHiddenWindowId();
             const tab = await chrome.tabs.create({
                 url,
-                active: false
+                active: false,
+                ...(windowId !== null ? { windowId } : {})
             });
             tabId = tab.id;
             // Wait for page to load
@@ -291,6 +293,44 @@ export class Scraper {
         }
     }
     /**
+     * Get (or lazily create) a minimized, unfocused window to host scrape tabs in,
+     * so the user never sees them pop up or steal focus. Reused across checks;
+     * recreated automatically if the user closes it.
+     */
+    static async getHiddenWindowId() {
+        if (this.hiddenWindowId !== null) {
+            try {
+                await chrome.windows.get(this.hiddenWindowId);
+                return this.hiddenWindowId;
+            }
+            catch (e) {
+                // Window no longer exists (e.g. user closed it) - fall through and recreate
+                this.hiddenWindowId = null;
+            }
+        }
+        try {
+            // Chrome rejects windows.create() calls that combine width/height with
+            // state: 'minimized' in one call, so create it normal-sized first, then
+            // minimize it in a follow-up update.
+            const win = await chrome.windows.create({
+                url: 'about:blank',
+                type: 'popup',
+                focused: false,
+                width: 1280,
+                height: 900
+            });
+            await chrome.windows.update(win.id, { state: 'minimized', focused: false });
+            this.hiddenWindowId = win.id;
+            return this.hiddenWindowId;
+        }
+        catch (e) {
+            // If window creation fails for any reason, fall back to the current window
+            // rather than breaking scraping entirely.
+            console.warn('Failed to create hidden scraping window, falling back to current window:', e);
+            return null;
+        }
+    }
+    /**
      * Wait for tab to finish loading
      */
     static waitForTabLoad(tabId) {
@@ -310,112 +350,6 @@ export class Scraper {
         });
     }
     /**
-     * Function to be injected into page (runs in page context)
-     * This must be completely self-contained with no external dependencies
-     */
-    static extractPageData(source, maxResults) {
-        // This function runs in the page context, so it can't import modules
-        // Define extraction functions FIRST (before calling them)
-        // Inline Audible extractor
-        function extractAudibleData(max) {
-            const items = [];
-            // Use specific selector that gets ~20 search results, not 1000+ navigation items
-            const containers = document.querySelectorAll('li.productListItem');
-            for (let i = 0; i < Math.min(containers.length, max); i++) {
-                const container = containers[i];
-                // Extract title
-                const titleEl = container.querySelector('h3 a, .bc-heading a, h3.bc-heading a');
-                const title = titleEl?.textContent?.trim();
-                const url = titleEl?.href;
-                if (!title || !url)
-                    continue;
-                // Extract book number from series field (e.g., "Series: Spellmonger, Book 18")
-                let bookNumber = null;
-                const seriesText = container.textContent || '';
-                const seriesMatch = seriesText.match(/Series:[^\n]*Book\s+(\d+)/i) ||
-                    seriesText.match(/,\s*Book\s+(\d+)/i);
-                if (seriesMatch) {
-                    bookNumber = parseInt(seriesMatch[1]);
-                }
-                // If not in series field, try title (e.g., "Spellmonger 17")
-                if (!bookNumber) {
-                    const titleMatch = title.match(/\b(\d+)\b/);
-                    if (titleMatch) {
-                        const num = parseInt(titleMatch[1]);
-                        if (num > 0 && num < 100) {
-                            bookNumber = num;
-                        }
-                    }
-                }
-                // Extract release date (e.g., "Release date: 03-03-26")
-                let releaseDateRaw = null;
-                const dateMatch = seriesText.match(/Release date:\s*([^\n]+)/i);
-                if (dateMatch) {
-                    releaseDateRaw = dateMatch[1].trim();
-                }
-                // Extract availability from buttons
-                let availability = 'unknown';
-                const containerText = container.textContent?.toLowerCase() || '';
-                if (containerText.includes('pre-order') || containerText.includes('preorder')) {
-                    availability = 'preorder';
-                }
-                else if (containerText.includes('play') ||
-                    containerText.includes('add to cart') ||
-                    containerText.includes('buy now') ||
-                    containerText.includes('in your library')) {
-                    availability = 'available';
-                }
-                items.push({
-                    title,
-                    url: url.split('?')[0],
-                    releaseDate: releaseDateRaw, // Will be normalized by backend
-                    releaseDateRaw,
-                    availability,
-                    source: 'audible',
-                    bookNumber
-                });
-            }
-            return { items };
-        }
-        // Inline Amazon extractor
-        function extractAmazonData(max) {
-            const items = [];
-            const containers = document.querySelectorAll('[data-asin]:not([data-asin=""])');
-            for (let i = 0; i < Math.min(containers.length, max); i++) {
-                const container = containers[i];
-                const titleEl = container.querySelector('h2 a, .s-line-clamp-2');
-                const title = titleEl?.textContent?.trim();
-                const url = titleEl?.href;
-                if (title && url) {
-                    items.push({
-                        title,
-                        url: url.split('?')[0],
-                        releaseDate: null,
-                        releaseDateRaw: null,
-                        availability: 'unknown',
-                        source: 'amazon'
-                    });
-                }
-            }
-            return { items };
-        }
-        // Now call the appropriate function
-        try {
-            if (source === 'audible') {
-                return extractAudibleData(maxResults);
-            }
-            else {
-                return extractAmazonData(maxResults);
-            }
-        }
-        catch (e) {
-            return {
-                items: [],
-                error: `Extraction error: ${e.message || String(e)}`
-            };
-        }
-    }
-    /**
      * Reset failure counts (e.g., after settings change)
      */
     static resetFailureCounts() {
@@ -423,3 +357,5 @@ export class Scraper {
     }
 }
 Scraper.failureCounts = new Map();
+/** ID of the reused hidden/minimized window used to host scrape tabs (see getHiddenWindowId). */
+Scraper.hiddenWindowId = null;

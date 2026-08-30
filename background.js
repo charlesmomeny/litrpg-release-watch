@@ -151,22 +151,9 @@ async function checkSingleSeries(seriesId) {
             allUpdates.push(...audibleResult.updates);
         }
     }
-    // DISABLED: Amazon checking (too much merchandise pollution)
-    // Only using Audible for cleaner audiobook-specific results
-    /*
-    if (series.amazonSeriesUrl) {
-      const amazonResult = await checkSource(
-        series,
-        'amazon',
-        series.amazonSeriesUrl,
-        settings
-      );
-      
-      if (amazonResult.updates.length > 0) {
-        allUpdates.push(...amazonResult.updates);
-      }
-    }
-    */
+    // Amazon checking is intentionally not wired up here (too much merchandise
+    // pollution in Amazon search results vs. audiobook-specific Audible results).
+    // checkSource() still supports source: 'amazon' generically if this is revisited.
     // Update last check timestamp (both in separate lastCheck object and in series)
     const timestamp = Date.now();
     await StorageManager.updateLastCheck(seriesId, timestamp);
@@ -219,96 +206,31 @@ async function checkSource(series, source, url, settings) {
                 error: parseResult.error
             };
         }
-        // FILTER OUT SEARCH POLLUTION: Only save items that match the series name AND are audiobooks
-        const filteredItems = parseResult.items.filter(item => {
-            const itemTitle = item.title.toLowerCase();
-            const seriesName = series.title.toLowerCase();
-            // FILTER 1: Must match series name (FUZZY match to handle variations)
-            let matchesSeries = false;
-            // Normalize both for comparison (remove "the", punctuation, handle plurals)
-            const normalizeForMatch = (str) => {
-                return str
-                    .replace(/^the\s+/i, '')
-                    .replace(/[^\w\s]/g, ' ') // Remove punctuation
-                    .replace(/s\b/g, '') // Remove plural 's' at word boundaries
-                    .replace(/\s+/g, ' ')
-                    .trim();
+        // SAFETY CHECK: A scrape that returns 0 items with no explicit error is most likely
+        // a transient failure (bot-block that didn't produce recognizable error text, a
+        // layout change, or the page not finishing rendering in time) rather than a real
+        // "series has no books" result. Treat it as a soft failure and DO NOT save it as
+        // the new snapshot - overwriting a real baseline with an empty one would make the
+        // next successful check look like a "first check" and silently skip notifying
+        // about any books that appear in between (this was likely why some new releases,
+        // e.g. Primal Hunter #15, never triggered an alert).
+        if (!parseResult.items || parseResult.items.length === 0) {
+            console.warn(`${series.title}: Scrape returned 0 items with no error - skipping snapshot update to avoid corrupting baseline`);
+            await StorageManager.addErrorLog({
+                seriesId: series.id,
+                source,
+                message: 'Scrape returned 0 items (no explicit error) - possible bot block, layout change, or slow page render. Snapshot was not updated.'
+            });
+            return {
+                seriesId: series.id,
+                source,
+                success: false,
+                timestamp: Date.now(),
+                itemsFound: 0,
+                updates: [],
+                error: 'Zero items scraped - snapshot preserved'
             };
-            const normalizedSeries = normalizeForMatch(seriesName);
-            const normalizedTitle = normalizeForMatch(itemTitle);
-            // Check if normalized series appears in normalized title
-            if (normalizedTitle.includes(normalizedSeries)) {
-                matchesSeries = true;
-            }
-            // Also check original (for cases where normalization removes too much)
-            if (itemTitle.includes(seriesName)) {
-                matchesSeries = true;
-            }
-            // Try without "The" prefix on series name
-            const seriesNameNoThe = seriesName.replace(/^the\s+/, '');
-            if (seriesNameNoThe !== seriesName && itemTitle.includes(seriesNameNoThe)) {
-                matchesSeries = true;
-            }
-            if (!matchesSeries)
-                return false;
-            // FILTER 2: AUDIOBOOKS ONLY - Exclude variants/merchandise/non-audio
-            const pollutionKeywords = [
-                // Variants
-                'graphic novel',
-                'light novel',
-                'manga',
-                'vol.', // Light novel volumes
-                'volume 1', 'volume 2', 'volume 3',
-                // Foreign editions
-                'french edition',
-                'german edition',
-                'spanish edition',
-                'édition française',
-                'édition',
-                // Audio variants we don't want
-                'dramatized adaptation',
-                'dramatized audio',
-                'full cast',
-                'full-cast',
-                'radio play',
-                // Physical items / merchandise
-                'bookmark',
-                'shirt',
-                't-shirt',
-                'tshirt',
-                'poster',
-                'print',
-                'merch',
-                'mug',
-                'tumbler',
-                'cup',
-                'sticker',
-                'decal',
-                'sign',
-                'metal',
-                'vinyl',
-                'canvas',
-                'artwork',
-                // Video/physical media
-                '[dvd]',
-                '[blu-ray]',
-                'dvd',
-                'blu-ray',
-                'bluray',
-                'movie',
-                'film',
-                'renewed', // Amazon renewed products
-                // Gift items
-                'gift',
-                'gifts',
-                'notebook',
-                'journal',
-                'calendar'
-            ];
-            // Exclude if title contains any pollution keywords
-            const isPollution = pollutionKeywords.some(keyword => itemTitle.includes(keyword));
-            return !isPollution;
-        });
+        }
         // SAVE ALL ITEMS (no filtering)
         // User requirement: "capture everything in your logic - all results"
         console.log(`${series.title}: Captured ${parseResult.items.length} items`);

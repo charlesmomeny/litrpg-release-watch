@@ -127,6 +127,8 @@ export function normalizeUrl(url) {
  * Extract ASIN from Amazon/Audible URL
  */
 export function extractAsin(url) {
+    if (!url)
+        return null;
     const match = url.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);
     return match ? match[1] : null;
 }

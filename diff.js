@@ -12,6 +12,7 @@
  * - Changing ASINs
  * - Unstable search result ordering
  */
+import { extractAsin } from './utils.js';
 export class DiffEngine {
     /** Returns the audit collector from the most recent compareSnapshots call. */
     static getLastAudit() {
@@ -326,7 +327,7 @@ export class DiffEngine {
             item,
             // Use existing bookNumber from item (already extracted by scraper/parser)
             bookNumber: item.bookNumber !== undefined ? item.bookNumber : null,
-            asin: this.extractAsin(item.url)
+            asin: extractAsin(item.url)
         }));
         // Find max book number
         const numberedBooks = books.filter(b => b.bookNumber !== null);
@@ -334,62 +335,6 @@ export class DiffEngine {
             ? Math.max(...numberedBooks.map(b => b.bookNumber))
             : 0;
         return { items: books, maxNumber };
-    }
-    /**
-     * Extract book number from title
-     * Patterns: "Book 7", "Series 7:", "7: Title", "Book #7", etc.
-     */
-    static extractBookNumber(title) {
-        // Map spelled-out numbers to digits
-        const wordToNumber = {
-            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
-            'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
-            'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20
-        };
-        // Normalize title for easier matching
-        const normalized = title
-            .replace(/^The\s+/i, '')
-            .trim();
-        // Try word patterns FIRST (e.g., "Book One", "Book Two")
-        const wordPattern = /\bBook\s+(One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b/i;
-        const wordMatch = normalized.match(wordPattern);
-        if (wordMatch) {
-            const word = wordMatch[1].toLowerCase();
-            const num = wordToNumber[word];
-            if (num) {
-                console.log(`Extracted book number ${num} from word "${wordMatch[1]}" in "${title}"`);
-                return num;
-            }
-        }
-        // Try multiple digit patterns (in order of reliability)
-        const patterns = [
-            /\bBook\s*#?(\d+)\b/i, // "Book 7", "Book #7"
-            /,\s*Book\s+(\d+)\b/i, // ", Book 7"
-            /:\s*Book\s+(\d+)\b/i, // ": Book 7"
-            /\b(\d+):\s+[A-Z]/, // "7: Title" (number followed by colon and capital letter)
-            /\s(\d+):\s+A\s+LitRPG/i, // "7: A LitRPG..."
-            /\s(\d+)\s*$/, // "Series Name 7" (number at end)
-            /\s(\d+)(?:\s|:)/ // "Series 7 " or "Series 7:"
-        ];
-        for (const pattern of patterns) {
-            const match = normalized.match(pattern);
-            if (match) {
-                const num = parseInt(match[1]);
-                // Reasonable book number range (avoid matching years, page counts, etc.)
-                if (num > 0 && num < 500) {
-                    return num;
-                }
-            }
-        }
-        return null;
-    }
-    /**
-     * Extract ASIN from URL
-     */
-    static extractAsin(url) {
-        const match = url.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);
-        return match ? match[1] : null;
     }
     /**
      * Calculate title similarity between series title and book title

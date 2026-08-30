@@ -41,15 +41,5 @@
     "32": "assets/icon32.png",
     "48": "assets/icon48.png",
     "128": "assets/icon128.png"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://www.audible.com/*",
-        "https://www.amazon.com/*"
-      ],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ]
+  }
 }
