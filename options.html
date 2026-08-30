@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LitRPG Release Watch - Settings</title>
+  <link rel="stylesheet" href="options.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <h1>LitRPG Release Watch</h1>
+        <p class="version">v1.0.0</p>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-tab="series">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+          <span>Series</span>
+        </button>
+        <button class="nav-item" data-tab="statistics">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3v18h18"/>
+            <path d="M18 17V9m-5 8V5m-5 12v-3"/>
+          </svg>
+          <span>Statistics</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v6m0 6v6m8.66-10l-5.2 3m-6.92 4l-5.2 3M3.34 7l5.2 3m6.92 4l5.2 3"/>
+          </svg>
+          <span>Settings</span>
+        </button>
+        <button class="nav-item" data-tab="audit">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 11l3 3L22 4"/>
+            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+          </svg>
+          <span>Audit log</span>
+        </button>
+        <button class="nav-item" data-tab="about">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4m0-4h.01"/>
+          </svg>
+          <span>About</span>
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Series Tab -->
+      <div id="seriesTab" class="tab-content active">
+        <header class="page-header">
+          <div>
+            <h2 class="page-title">Manage Series</h2>
+            <p class="page-subtitle">Track your favorite book series for new releases</p>
+          </div>
+          <button id="addSeriesBtn" class="btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14m-7-7h14"/>
+            </svg>
+            Add Series
+          </button>
+        </header>
+
+        <div id="seriesListContainer" class="series-grid">
+          <!-- Series cards will be inserted here -->
+        </div>
+
+        <div id="noSeriesMessage" class="empty-message" style="display: none;">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+          <h3>No series tracked</h3>
+          <p>Add your first series to start monitoring for new releases</p>
+        </div>
+      </div>
+
+      <!-- Statistics Tab -->
+      <div id="statisticsTab" class="tab-content">
+        <header class="page-header">
+          <div>
+            <h2 class="page-title">Statistics</h2>
+            <p class="page-subtitle">Overview of your tracked series and updates</p>
+          </div>
+          <button id="refreshStatsBtn" class="btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <path d="M9 12l2 2 4-4"/>
+            </svg>
+            Refresh
+          </button>
+        </header>
+
+        <div class="stats-grid">
+          <!-- Overview Cards -->
+          <div class="stat-card">
+            <div class="stat-icon" style="background: #fef3c7; color: #d97706;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value" id="totalSeriesStat">0</div>
+              <div class="stat-label">Total Series</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon" style="background: #d1fae5; color: #059669;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                <path d="M22 4L12 14.01l-3-3"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value" id="activeSeriesStat">0</div>
+              <div class="stat-label">Active Series</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon" style="background: #dbeafe; color: #2563eb;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/>
+                <path d="M6 1v3m8-3v3"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value" id="totalUpdatesStat">0</div>
+              <div class="stat-label">Total Updates</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon" style="background: #fee2e2; color: #dc2626;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value" id="unreadUpdatesStat">0</div>
+              <div class="stat-label">Unread Updates</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upcoming Releases -->
+        <section class="stats-section">
+          <h3 class="section-title">Upcoming Releases</h3>
+          <div id="upcomingReleasesList" class="releases-list">
+            <!-- Releases will be inserted here -->
+          </div>
+          <div id="noUpcoming" class="empty-state-small" style="display: none;">
+            <p>No upcoming releases found</p>
+          </div>
+        </section>
+
+        <!-- Update Types Breakdown -->
+        <section class="stats-section">
+          <h3 class="section-title">Updates by Type</h3>
+          <div id="updateTypesList" class="update-types-grid">
+            <!-- Update types will be inserted here -->
+          </div>
+        </section>
+      </div>
+
+      <!-- Settings Tab -->
+      <div id="settingsTab" class="tab-content">
+        <header class="page-header">
+          <div>
+            <h2 class="page-title">Settings</h2>
+            <p class="page-subtitle">Configure how the extension works</p>
+          </div>
+        </header>
+
+        <div class="settings-sections">
+          <!-- Checking Settings -->
+          <section class="settings-section">
+            <h3 class="section-title">Checking</h3>
+            
+            <div class="setting-row">
+              <div class="setting-label">
+                <label for="pollInterval">Poll Interval</label>
+                <p class="setting-description">How often to check for updates</p>
+              </div>
+              <select id="pollInterval" class="select">
+                <option value="1">Every hour</option>
+                <option value="3">Every 3 hours</option>
+                <option value="6">Every 6 hours</option>
+                <option value="12">Every 12 hours</option>
+                <option value="24">Every 24 hours</option>
+              </select>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <label for="maxResults">Max Results Per Source</label>
+                <p class="setting-description">Number of items to check from each source</p>
+              </div>
+              <input type="number" id="maxResults" class="input" min="5" max="50" step="5">
+            </div>
+          </section>
+
+          <!-- Notifications -->
+          <section class="settings-section">
+            <h3 class="section-title">Notifications</h3>
+            
+            <div class="setting-row">
+              <div class="setting-label">
+                <label for="systemNotifications">System Notifications</label>
+                <p class="setting-description">Show desktop notifications for updates</p>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="systemNotifications">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <label for="quietHoursEnabled">Quiet Hours</label>
+                <p class="setting-description">Don't send notifications during these hours</p>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="quietHoursEnabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div id="quietHoursSettings" class="setting-row indented" style="display: none;">
+              <div class="setting-label">
+                <label>Quiet Hours Period</label>
+              </div>
+              <div class="time-inputs">
+                <input type="time" id="quietHoursStart" class="input">
+                <span>to</span>
+                <input type="time" id="quietHoursEnd" class="input">
+              </div>
+            </div>
+          </section>
+
+          <!-- Detection Settings -->
+          <section class="settings-section">
+            <h3 class="section-title">Detection</h3>
+            
+            <div class="setting-row">
+              <div class="setting-label">
+                <label for="dateShiftThreshold">Date Shift Threshold (days)</label>
+                <p class="setting-description">Only notify if release date changes by this many days</p>
+              </div>
+              <input type="number" id="dateShiftThreshold" class="input" min="0" max="365">
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <label for="trackPriceChanges">Track Price Changes</label>
+                <p class="setting-description">Get notified when prices change (experimental)</p>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="trackPriceChanges">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </section>
+
+          <!-- Advanced -->
+          <section class="settings-section">
+            <h3 class="section-title">Advanced</h3>
+            
+            <div class="setting-row">
+              <div class="setting-label">
+                <label for="fallbackScrapeEnabled">Fallback Scraping</label>
+                <p class="setting-description">Open tabs to scrape when fetch mode fails (requires permissions)</p>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="fallbackScrapeEnabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            
+            <div class="setting-row">
+              <div class="setting-label">
+                <label for="ignorePreorders">Ignore Pre-Orders</label>
+                <p class="setting-description">Only notify when books become available (ignore pre-order announcements)</p>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="ignorePreorders">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </section>
+
+          <!-- Data Export -->
+          <section class="settings-section">
+            <h3 class="section-title">Snapshot Export</h3>
+            <p class="setting-description" style="margin-bottom: 1rem;">
+              Export snapshot data for backup or debugging. Snapshots are automatically saved in browser storage (persistent across sessions).
+            </p>
+            
+            <div class="setting-row">
+              <div class="setting-label">
+                <label>Full Snapshot Export</label>
+                <p class="setting-description">Export all items from all snapshots to CSV (detailed)</p>
+              </div>
+              <button id="exportSnapshotsBtn" class="btn-secondary">Export Full CSV</button>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <label>Snapshot Summary</label>
+                <p class="setting-description">Export summary statistics (item counts, max book numbers)</p>
+              </div>
+              <button id="exportSummaryBtn" class="btn-secondary">Export Summary CSV</button>
+            </div>
+          </section>
+
+          <div class="settings-actions">
+            <button id="saveSettingsBtn" class="btn-primary">Save Settings</button>
+            <button id="exportDataBtn" class="btn-secondary">Export All Data</button>
+            <button id="importDataBtn" class="btn-secondary">Import Data</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- About Tab -->
+      <div id="auditTab" class="tab-content">
+        <header class="page-header">
+          <div>
+            <h2 class="page-title">Audit log</h2>
+            <p class="page-subtitle">Diagnose why an alert did or didn't fire. Last 14 days of checks.</p>
+          </div>
+          <div>
+            <button id="refreshAuditBtn" class="btn btn-secondary">Refresh</button>
+          </div>
+        </header>
+        <div class="audit-content">
+          <div class="audit-controls" style="display:flex; gap:12px; margin-bottom:16px; align-items:center; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px;">
+              <span>Series:</span>
+              <select id="auditSeriesFilter" style="padding:6px 10px; min-width:200px;">
+                <option value="">— All series —</option>
+              </select>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px;">
+              <span>Show:</span>
+              <select id="auditViewMode" style="padding:6px 10px;">
+                <option value="recent">Recent checks</option>
+                <option value="rejections">Rejections only</option>
+                <option value="firstseen">First-seen books</option>
+                <option value="notified">Last notified per series</option>
+              </select>
+            </label>
+          </div>
+          <div id="auditOutput" style="font-family: var(--font-mono, monospace); font-size:13px; line-height:1.6;">
+            <p style="color:#888;">Loading audit data…</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="aboutTab" class="tab-content">
+        <header class="page-header">
+          <div>
+            <h2 class="page-title">About</h2>
+            <p class="page-subtitle">Information about this extension</p>
+          </div>
+        </header>
+
+        <div class="about-content">
+          <section class="about-section">
+            <h3>How It Works</h3>
+            <p>LitRPG Release Watch monitors Audible and Amazon for updates to your favorite book series. It checks for:</p>
+            <ul>
+              <li>New books in the series</li>
+              <li>Release date changes</li>
+              <li>Availability changes (pre-order → available)</li>
+              <li>Narrator or runtime changes (Audible only)</li>
+            </ul>
+          </section>
+
+          <section class="about-section">
+            <h3>Privacy</h3>
+            <p>All data is stored locally on your device. No information is sent to external servers. No analytics or tracking.</p>
+          </section>
+
+          <section class="about-section">
+            <h3>Tips</h3>
+            <ul>
+              <li>Use specific search URLs from Audible/Amazon for best results</li>
+              <li>Enable fallback scraping if you encounter bot detection</li>
+              <li>Adjust date shift threshold to avoid noise from minor changes</li>
+              <li>Export your data regularly as a backup</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add/Edit Series Modal -->
+  <div id="seriesModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add Series</h2>
+        <button id="closeModalBtn" class="btn-icon-close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <form id="seriesForm" class="modal-body">
+        <div class="form-group">
+          <label for="seriesTitle" class="form-label">Series Title *</label>
+          <input type="text" id="seriesTitle" class="form-input" required placeholder="e.g., Cradle">
+        </div>
+
+        <div class="form-group">
+          <label for="nextInstallment" class="form-label">Next Installment #</label>
+          <input type="text" id="nextInstallment" class="form-input" placeholder="e.g., 12 or Book 12">
+        </div>
+
+        <div class="form-group">
+          <label for="completionStatus" class="form-label">Series Status</label>
+          <select id="completionStatus" class="form-input">
+            <option value="unknown">Unknown</option>
+            <option value="ongoing">Ongoing</option>
+            <option value="complete">Complete</option>
+          </select>
+          <p class="form-help">Mark as complete to reduce check frequency or stop tracking</p>
+        </div>
+
+        <div class="form-group">
+          <label for="audibleUrl" class="form-label">Audible Search URL</label>
+          <input type="url" id="audibleUrl" class="form-input" placeholder="https://www.audible.com/search?keywords=...">
+          <p class="form-help">Paste the URL from Audible search results</p>
+        </div>
+
+        <div class="form-group">
+          <label for="amazonUrl" class="form-label">Amazon Series URL</label>
+          <input type="url" id="amazonUrl" class="form-input" placeholder="https://www.amazon.com/...">
+          <p class="form-help">Paste the URL from Amazon series page</p>
+        </div>
+
+        <div class="form-group">
+          <label for="seriesNotes" class="form-label">Notes</label>
+          <input type="text" id="seriesNotes" class="form-input" placeholder="e.g., Final book, Waiting, etc.">
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="seriesEnabled" checked>
+            <span>Enable checking for this series</span>
+          </label>
+        </div>
+
+        <div id="validationResults" class="validation-results" style="display: none;">
+          <!-- Validation results will be inserted here -->
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="cancelBtn" class="btn-secondary">Cancel</button>
+          <button type="button" id="testUrlsBtn" class="btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+              <path d="M22 4L12 14.01l-3-3"/>
+            </svg>
+            Test URLs
+          </button>
+          <button type="button" id="previewBooksBtn" class="btn-secondary" style="display: none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            View Books
+          </button>
+          <button type="submit" class="btn-primary" id="saveSeriesBtn">Save Series</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Books Preview Modal -->
+  <div id="booksModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h2 id="booksModalTitle">Books Found</h2>
+        <button id="closeBooksModalBtn" class="btn-icon-close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="booksPreviewList" class="books-preview-list">
+          <!-- Books will be inserted here -->
+        </div>
+        <div id="noBooksFound" class="empty-state-small" style="display: none;">
+          <p>No books found. Check your URLs or try running a check first.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="importFileInput" accept=".json" style="display: none;">
+
+  <script src="options.js" type="module"></script>
+</body>
+</html>
