@@ -102,11 +102,14 @@ export class AudibleParser {
         const runtime = this.extractRuntime(container);
         const author = this.extractAuthor(container);
         const narrator = this.extractNarrator(container);
-        // Extract book number from the title, falling back to the separate "Series:
-        // X, Book N" line Audible renders below it - many titles are just the book's
-        // own name with no number at all (e.g. "Unchained" for "Welcome to the
-        // Multiverse, Book 11"), so the number only exists in that second line.
-        const bookNumber = extractBookNumber(title) ?? this.extractSeriesBookNumber(container);
+        // Audible renders the series name and book number in a separate "Series: X,
+        // Book N" / subtitle line, not in the title itself - many titles are just the
+        // book's own name with no series info at all (e.g. "Unchained" for "Welcome
+        // to the Multiverse, Book 11"). Capture that line so both the book number and
+        // the series-name match (matchesSeriesName in utils.js) have a second place to
+        // look besides the bare title.
+        const seriesInfo = this.extractSeriesInfoText(container);
+        const bookNumber = extractBookNumber(title) ?? (seriesInfo ? extractBookNumber(seriesInfo) : undefined);
         // Detect if this is the final book
         const finalBook = isFinalBook(title, containerText);
         return {
@@ -117,6 +120,7 @@ export class AudibleParser {
             availability,
             source: 'audible',
             bookNumber,
+            seriesInfo: seriesInfo || undefined,
             isFinalBook: finalBook,
             author: author || undefined,
             runtimeMinutes: runtime,
@@ -267,21 +271,20 @@ export class AudibleParser {
         return null;
     }
     /**
-     * Extract book number from the "Series: X, Book N" line Audible renders as its
-     * own list item, separate from the title. Search-results pages use class
-     * "seriesLabel" ("Series: Welcome to the Multiverse, Book 11"); a series'
-     * own catalog page instead uses "subtitle" for the same info without the
-     * "Series:" prefix ("The Wandering Inn Series, Book 1: Parts 1 and 2") -
-     * check both since which one is present depends on the page type.
+     * Extract the "Series: X, Book N" text Audible renders as its own list item,
+     * separate from the title. Search-results pages use class "seriesLabel"
+     * ("Series: Welcome to the Multiverse, Book 11"); a series' own catalog page
+     * instead uses "subtitle" for the same info without the "Series:" prefix
+     * ("The Wandering Inn Series, Book 1: Parts 1 and 2") - check both since which
+     * one is present depends on the page type.
      */
-    static extractSeriesBookNumber(container) {
+    static extractSeriesInfoText(container) {
         for (const selector of ['.seriesLabel', '.subtitle']) {
             const text = container.querySelector(selector)?.textContent?.trim();
-            const num = text ? extractBookNumber(text) : undefined;
-            if (num !== undefined)
-                return num;
+            if (text)
+                return text;
         }
-        return undefined;
+        return null;
     }
     /**
      * Extract narrator

@@ -334,3 +334,16 @@ export function matchesSeriesName(itemTitle, seriesTitle) {
         return false;
     return true;
 }
+/**
+ * Like matchesSeriesName(), but also checks a scraped item's "seriesInfo" text
+ * (Audible's separate "Series: X, Book N" / subtitle line) when the bare title
+ * doesn't match. Many series title their books with standalone names that never
+ * repeat the series name at all (e.g. "Fae and Fare" for "The Wandering Inn",
+ * "Unchained" for "Welcome to the Multiverse") - matchesSeriesName(item.title, ...)
+ * alone would reject nearly every book in a series like that, since the series
+ * name only appears in that second line, not the title.
+ */
+export function itemMatchesSeries(item, seriesTitle) {
+    return matchesSeriesName(item.title, seriesTitle) ||
+        (!!item.seriesInfo && matchesSeriesName(item.seriesInfo, seriesTitle));
+}

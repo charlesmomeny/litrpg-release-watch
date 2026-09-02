@@ -5,7 +5,7 @@ import { StorageManager } from './storage.js';
 import { Scraper } from './scraper.js';
 import { DiffEngine } from './diff.js';
 import { NotificationManager } from './notifications.js';
-import { matchesSeriesName } from './utils.js';
+import { itemMatchesSeries } from './utils.js';
 // CRITICAL: Make modules globally accessible for debugging and checks
 globalThis.StorageManager = StorageManager;
 globalThis.Scraper = Scraper;
@@ -352,7 +352,7 @@ async function updateSeriesMetadataFromBothSources(seriesId, timestamp) {
             // CRITICAL: Only count books that match series name, are available, and
             // are the English release (foreign-language editions/translations often
             // reuse the same series name and would otherwise pollute "next book" math).
-            if (matchesSeriesName(item.title, series.title) &&
+            if (itemMatchesSeries(item, series.title) &&
                 item.availability === 'available' &&
                 !DiffEngine.isLikelyNonEnglish(item.title) &&
                 !DiffEngine.isForeignEditionVariant(item.title)) {

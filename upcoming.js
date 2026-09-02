@@ -4,11 +4,11 @@
  */
 import { StorageManager } from './storage.js';
 import { DiffEngine } from './diff.js';
-import { matchesSeriesName } from './utils.js';
+import { itemMatchesSeries } from './utils.js';
 /**
  * Scan every series' latest Audible snapshot for pre-order items (the only place
  * Audible actually publishes a release date) and build a sorted "what's coming up"
- * list. Only English-language items that pass matchesSeriesName() count, so
+ * list. Only English-language items that pass itemMatchesSeries() count, so
  * cross-series pollution and foreign-language editions never show up as a false
  * "upcoming" release. Two extra cross-checks help further:
  *  - the pre-order's book number must match the series' already-computed "next"
@@ -22,7 +22,7 @@ export async function getUpcomingReleases() {
     const seriesMap = new Map(allSeries.map(s => [s.id, s]));
     const now = new Date();
     const upcoming = [];
-    const isRealEnglishMatch = (item, series) => matchesSeriesName(item.title, series.title) &&
+    const isRealEnglishMatch = (item, series) => itemMatchesSeries(item, series.title) &&
         !DiffEngine.isLikelyNonEnglish(item.title) &&
         !DiffEngine.isForeignEditionVariant(item.title);
     Object.entries(snapshots).forEach(([key, snapshot]) => {

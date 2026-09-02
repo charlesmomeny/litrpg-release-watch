@@ -4,6 +4,10 @@
 import { StorageManager } from './storage.js';
 import { formatTimestamp } from './utils.js';
 import { getUpcomingReleases } from './upcoming.js';
+// Audit rejection reasons that represent expected, healthy filtering rather than a
+// problem worth surfacing - see the comment where this is used in
+// buildSeriesViewModel() for why these are excluded from the "N rejected" badge.
+const ROUTINE_REJECTION_REASONS = new Set(['duplicate_asin', 'already_seen_title', 'too_old', 'preorder']);
 // Current editing series ID (null for new)
 let editingSeriesId = null;
 // DOM Elements
@@ -203,16 +207,24 @@ async function buildSeriesViewModel(series, lastCheckTime, snapshotsData, allUpd
     const alertBadge = hasUnacknowledgedUpdates
         ? `<span class="alert-badge" title="New updates available!">🔔 ${unacknowledgedCount}</span>`
         : '';
-    // Surface the most recent audit check's rejections directly on the card, so a
-    // book that was scraped but filtered out (wrong author, title mismatch, too old,
-    // etc.) doesn't require digging through the Audit Log tab to notice.
+    // Surface the most recent audit check's NOTEWORTHY rejections directly on the
+    // card - a book that was scraped but filtered out for a reason that could
+    // plausibly be a false positive (wrong author, non-English, title mismatch,
+    // etc.) doesn't require digging through the Audit Log tab to notice. Routine
+    // reasons are excluded from this count: "duplicate_asin"/"already_seen_title"
+    // fire on nearly every already-known book on every single check (that's
+    // correct, expected behavior, not a problem), and "too_old"/"preorder" just
+    // confirm the user's own settings did what they were told to. Including those
+    // made healthy re-scans of a 20-book catalog show "⚠️ 16 rejected", which reads
+    // as an error when nothing is wrong.
     const seriesAuditLog = await StorageManager.getAuditLog(series.id);
     const latestAudit = seriesAuditLog[0];
-    const latestRejectionCount = latestAudit
-        ? Object.values(latestAudit.rejectionReasons || {}).reduce((sum, c) => sum + c, 0)
-        : 0;
+    const noteworthyRejections = latestAudit
+        ? Object.entries(latestAudit.rejectionReasons || {}).filter(([reason]) => !ROUTINE_REJECTION_REASONS.has(reason))
+        : [];
+    const latestRejectionCount = noteworthyRejections.reduce((sum, [, c]) => sum + c, 0);
     const auditWarningBadge = latestRejectionCount > 0
-        ? `<span class="audit-warning-badge" title="Last check rejected ${latestRejectionCount} candidate(s): ${escapeHtml(Object.entries(latestAudit.rejectionReasons).map(([r, c]) => `${r.replace(/_/g, ' ')} (${c})`).join(', '))}. Click to view in Audit Log.">⚠️ ${latestRejectionCount} rejected</span>`
+        ? `<span class="audit-warning-badge" title="Last check filtered out ${latestRejectionCount} candidate(s) worth a look: ${escapeHtml(noteworthyRejections.map(([r, c]) => `${r.replace(/_/g, ' ')} (${c})`).join(', '))}. Click to view in Audit Log.">⚠️ ${latestRejectionCount} rejected</span>`
         : '';
     // Build next book display (audio + text) plus a plain numeric value for sorting
     const nextAudio = series.nextAudioBook;

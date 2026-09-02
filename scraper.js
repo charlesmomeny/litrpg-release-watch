@@ -172,21 +172,20 @@ export class Scraper {
                         }
                         return undefined;
                     }
-                    // Extract book number from the "Series: X, Book N" line Audible
-                    // renders as its own list item, separate from the title - many
-                    // titles are just the book's own name with no number at all (e.g.
-                    // "Unchained" for "Welcome to the Multiverse, Book 11"), so the
-                    // number only exists in this second line. Search-results pages use
-                    // class "seriesLabel"; a series' own catalog page instead uses
-                    // "subtitle" for the same info - check both.
-                    function extractSeriesBookNumber(container) {
+                    // Extract the "Series: X, Book N" text Audible renders as its own
+                    // list item, separate from the title - many titles are just the
+                    // book's own name with no series info at all (e.g. "Unchained" for
+                    // "Welcome to the Multiverse, Book 11"), so both the book number and
+                    // the series-name match need a second place to look besides the bare
+                    // title. Search-results pages use class "seriesLabel"; a series' own
+                    // catalog page instead uses "subtitle" for the same info - check both.
+                    function extractSeriesInfoText(container) {
                         for (const selector of ['.seriesLabel', '.subtitle']) {
                             const text = container.querySelector(selector)?.textContent?.trim();
-                            const num = text ? extractBookNumber(text) : undefined;
-                            if (num !== undefined)
-                                return num;
+                            if (text)
+                                return text;
                         }
-                        return undefined;
+                        return null;
                     }
                     // Extract author
                     function extractAuthor(container) {
@@ -282,7 +281,8 @@ export class Scraper {
                             // Extract book number using proper function, falling back to
                             // the separate "Series: X, Book N" line when the title alone
                             // has no number in it
-                            const bookNumber = extractBookNumber(title) ?? extractSeriesBookNumber(container);
+                            const seriesInfo = extractSeriesInfoText(container);
+                            const bookNumber = extractBookNumber(title) ?? (seriesInfo ? extractBookNumber(seriesInfo) : undefined);
                             // Extract author
                             const author = extractAuthor(container);
                             // Extract narrator
@@ -314,6 +314,7 @@ export class Scraper {
                                 availability,
                                 source: 'audible',
                                 bookNumber,
+                                seriesInfo: seriesInfo || undefined,
                                 author: author || undefined,
                                 narrator: narrator || undefined
                             });
