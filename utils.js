@@ -326,12 +326,6 @@ export function matchesSeriesName(itemTitle, seriesTitle) {
     ];
     if (pollutionKeywords.some(keyword => title.includes(keyword)))
         return false;
-    // "Volume 1/2/3" omnibus editions are pollution, but plain substring matching
-    // also caught "Volume 10"-"Volume 39" (e.g. "Volume 20" contains "volume 2") and
-    // silently excluded those legitimate numbered releases. Word-boundary regex
-    // matches only the standalone digit.
-    if (/\bvolume\s+[123]\b/i.test(title))
-        return false;
     return true;
 }
 /**
