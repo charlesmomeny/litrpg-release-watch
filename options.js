@@ -79,6 +79,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelector(`.nav-item[data-tab="${requestedTab}"]`)?.click();
     }
 });
+// The background check (popup's "Check Now", or the periodic alarm) runs entirely
+// in the service worker - this page has no other way to learn it updated series
+// data, so without this listener the Series/Upcoming tabs silently show whatever
+// was loaded on page-open until manually reloaded, even after a check completes.
+// A full check writes storage once per series (every couple of seconds for
+// dozens of series), so debounce instead of reloading on every single write.
+let storageChangeReloadTimer = null;
+chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local')
+        return;
+    if (!changes.series && !changes.snapshots && !changes.updates && !changes.lastCheck)
+        return;
+    clearTimeout(storageChangeReloadTimer);
+    storageChangeReloadTimer = setTimeout(() => {
+        loadSeries();
+        loadUpcomingBooks();
+    }, 800);
+});
 /**
  * Setup navigation
  */
