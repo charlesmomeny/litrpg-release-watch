@@ -73,8 +73,57 @@
           </button>
         </header>
 
+        <div class="series-toolbar">
+          <div class="series-search-wrap">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input type="text" id="seriesSearchInput" class="series-search-input" placeholder="Search series...">
+          </div>
+          <div class="view-toggle" role="group" aria-label="Series view">
+            <button type="button" id="cardViewBtn" class="view-toggle-btn" data-view="card" title="Card view">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
+              Cards
+            </button>
+            <button type="button" id="listViewBtn" class="view-toggle-btn" data-view="list" title="List view">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+              </svg>
+              List
+            </button>
+          </div>
+        </div>
+
         <div id="seriesListContainer" class="series-grid">
           <!-- Series cards will be inserted here -->
+        </div>
+
+        <div id="seriesListTable" class="series-table-wrap" style="display: none;">
+          <table class="series-table">
+            <thead>
+              <tr>
+                <th data-sort="title">Title</th>
+                <th data-sort="sources">Sources</th>
+                <th data-sort="bookCount">Books</th>
+                <th data-sort="next">Next</th>
+                <th data-sort="status">Status</th>
+                <th data-sort="lastCheck">Last Check</th>
+                <th class="series-table-actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="seriesTableBody">
+              <!-- Series rows will be inserted here -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="noSeriesSearchResults" class="empty-state-small" style="display: none;">
+          <p>No series match your search</p>
         </div>
 
         <div id="noSeriesMessage" class="empty-message" style="display: none;">

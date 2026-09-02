@@ -93,15 +93,21 @@ export class AudibleParser {
         const url = this.extractUrl(container);
         if (!title || !url)
             return null;
+        // container.textContent walks the whole subtree on every access - read it
+        // once and share it between availability detection and the final-book check
+        // instead of each re-reading it independently.
+        const containerText = container.textContent || '';
         const releaseInfo = this.extractReleaseDate(container);
-        const availability = this.extractAvailability(container);
+        const availability = this.extractAvailability(containerText);
         const runtime = this.extractRuntime(container);
         const author = this.extractAuthor(container);
         const narrator = this.extractNarrator(container);
-        // Extract book number from title
-        const bookNumber = extractBookNumber(title);
+        // Extract book number from the title, falling back to the separate "Series:
+        // X, Book N" line Audible renders below it - many titles are just the book's
+        // own name with no number at all (e.g. "Unchained" for "Welcome to the
+        // Multiverse, Book 11"), so the number only exists in that second line.
+        const bookNumber = extractBookNumber(title) ?? this.extractSeriesBookNumber(container);
         // Detect if this is the final book
-        const containerText = container.textContent || '';
         const finalBook = isFinalBook(title, containerText);
         return {
             title,
@@ -190,10 +196,10 @@ export class AudibleParser {
         return { normalized: null, raw: null };
     }
     /**
-     * Extract availability status
+     * Extract availability status from the container's already-computed text
      */
-    static extractAvailability(container) {
-        const text = container.textContent?.toLowerCase() || '';
+    static extractAvailability(containerText) {
+        const text = containerText.toLowerCase();
         if (text.includes('pre-order') || text.includes('preorder') || text.includes('coming soon')) {
             return 'preorder';
         }
@@ -259,6 +265,23 @@ export class AudibleParser {
             }
         }
         return null;
+    }
+    /**
+     * Extract book number from the "Series: X, Book N" line Audible renders as its
+     * own list item, separate from the title. Search-results pages use class
+     * "seriesLabel" ("Series: Welcome to the Multiverse, Book 11"); a series'
+     * own catalog page instead uses "subtitle" for the same info without the
+     * "Series:" prefix ("The Wandering Inn Series, Book 1: Parts 1 and 2") -
+     * check both since which one is present depends on the page type.
+     */
+    static extractSeriesBookNumber(container) {
+        for (const selector of ['.seriesLabel', '.subtitle']) {
+            const text = container.querySelector(selector)?.textContent?.trim();
+            const num = text ? extractBookNumber(text) : undefined;
+            if (num !== undefined)
+                return num;
+        }
+        return undefined;
     }
     /**
      * Extract narrator

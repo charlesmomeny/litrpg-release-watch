@@ -90,12 +90,15 @@ export class AmazonParser {
         const url = this.extractUrl(container);
         if (!title || !url)
             return null;
+        // container.textContent walks the whole subtree on every access - read it
+        // once and share it between availability detection and the final-book check
+        // instead of each re-reading it independently.
+        const containerText = container.textContent || '';
         const releaseInfo = this.extractReleaseDate(container);
-        const availability = this.extractAvailability(container);
+        const availability = this.extractAvailability(containerText);
         // Extract book number from title
         const bookNumber = extractBookNumber(title);
         // Detect if this is the final book
-        const containerText = container.textContent || '';
         const finalBook = isFinalBook(title, containerText);
         return {
             title,
@@ -210,10 +213,10 @@ export class AmazonParser {
         return { normalized: null, raw: null };
     }
     /**
-     * Extract availability status
+     * Extract availability status from the container's already-computed text
      */
-    static extractAvailability(container) {
-        const text = container.textContent?.toLowerCase() || '';
+    static extractAvailability(containerText) {
+        const text = containerText.toLowerCase();
         // Check for pre-order indicators
         if (text.includes('pre-order') ||
             text.includes('preorder') ||

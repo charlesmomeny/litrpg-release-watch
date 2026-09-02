@@ -172,6 +172,22 @@ export class Scraper {
                         }
                         return undefined;
                     }
+                    // Extract book number from the "Series: X, Book N" line Audible
+                    // renders as its own list item, separate from the title - many
+                    // titles are just the book's own name with no number at all (e.g.
+                    // "Unchained" for "Welcome to the Multiverse, Book 11"), so the
+                    // number only exists in this second line. Search-results pages use
+                    // class "seriesLabel"; a series' own catalog page instead uses
+                    // "subtitle" for the same info - check both.
+                    function extractSeriesBookNumber(container) {
+                        for (const selector of ['.seriesLabel', '.subtitle']) {
+                            const text = container.querySelector(selector)?.textContent?.trim();
+                            const num = text ? extractBookNumber(text) : undefined;
+                            if (num !== undefined)
+                                return num;
+                        }
+                        return undefined;
+                    }
                     // Extract author
                     function extractAuthor(container) {
                         const selectors = [
@@ -263,8 +279,10 @@ export class Scraper {
                             const url = titleEl?.href;
                             if (!title || !url)
                                 continue;
-                            // Extract book number using proper function
-                            const bookNumber = extractBookNumber(title);
+                            // Extract book number using proper function, falling back to
+                            // the separate "Series: X, Book N" line when the title alone
+                            // has no number in it
+                            const bookNumber = extractBookNumber(title) ?? extractSeriesBookNumber(container);
                             // Extract author
                             const author = extractAuthor(container);
                             // Extract narrator

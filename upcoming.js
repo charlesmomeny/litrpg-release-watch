@@ -43,14 +43,16 @@ export async function getUpcomingReleases() {
                 return;
             if (!isRealEnglishMatch(item, series))
                 return;
-            // Book-number cross-check: once we know what number to expect next, require
-            // the pre-order to actually carry that number - a missing or mismatched
-            // number is far more likely to be a translated edition, spinoff, or wrong
-            // listing than the genuine next release (real numbered pre-orders reliably
-            // include the number in the title, e.g. "Series 16: A LitRPG Adventure").
+            // Book-number cross-check: once we know what number to expect next, reject
+            // pre-orders numbered below it - those are far more likely to be a translated
+            // edition, spinoff, or stale back-catalog listing than a genuine upcoming
+            // release. Numbers at or above the expected next one are kept, since
+            // publishers sometimes open pre-orders for two books in a series at once
+            // (e.g. next is 11 but 12 is already listed too) and both are real.
             // Skipped entirely for a series with no established next number yet (e.g.
             // one that's never had an available book), where we have nothing to compare.
-            if (typeof series.nextAudioBook === 'number' && item.bookNumber !== series.nextAudioBook) {
+            if (typeof series.nextAudioBook === 'number' &&
+                (typeof item.bookNumber !== 'number' || item.bookNumber < series.nextAudioBook)) {
                 return;
             }
             const releaseDate = new Date(item.releaseDate);

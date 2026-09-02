@@ -11,7 +11,20 @@ const navItems = document.querySelectorAll('.nav-item');
 const tabContents = document.querySelectorAll('.tab-content');
 const addSeriesBtn = document.getElementById('addSeriesBtn');
 const seriesListContainer = document.getElementById('seriesListContainer');
+const seriesListTable = document.getElementById('seriesListTable');
+const seriesTableBody = document.getElementById('seriesTableBody');
 const noSeriesMessage = document.getElementById('noSeriesMessage');
+const noSeriesSearchResults = document.getElementById('noSeriesSearchResults');
+const seriesSearchInput = document.getElementById('seriesSearchInput');
+const cardViewBtn = document.getElementById('cardViewBtn');
+const listViewBtn = document.getElementById('listViewBtn');
+// Series list view state - the view mode persists across sessions (last one used
+// wins on reload); search/sort are session-only and reset with each page load.
+const SERIES_VIEW_MODE_KEY = 'litrpg_seriesViewMode';
+let seriesViewMode = localStorage.getItem(SERIES_VIEW_MODE_KEY) === 'list' ? 'list' : 'card';
+let seriesSort = { column: 'title', dir: 'asc' };
+let seriesSearchQuery = '';
+let allSeriesViewModels = [];
 const seriesModal = document.getElementById('seriesModal');
 const modalTitle = document.getElementById('modalTitle');
 const closeModalBtn = document.getElementById('closeModalBtn');
@@ -51,6 +64,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupNavigation();
     setupEventListeners();
     setupAuditUI();
+    cardViewBtn.classList.toggle('active', seriesViewMode === 'card');
+    listViewBtn.classList.toggle('active', seriesViewMode === 'list');
     await loadSeries();
     await loadSettings();
     await loadUpcomingBooks();
@@ -100,6 +115,25 @@ function setupEventListeners() {
     });
     // URL Testing
     testUrlsBtn.addEventListener('click', testSeriesUrls);
+    // Series view mode / search / sort
+    cardViewBtn.addEventListener('click', () => setSeriesViewMode('card'));
+    listViewBtn.addEventListener('click', () => setSeriesViewMode('list'));
+    seriesSearchInput.addEventListener('input', () => {
+        seriesSearchQuery = seriesSearchInput.value;
+        renderSeriesViews();
+    });
+    seriesListTable.querySelectorAll('th[data-sort]').forEach(th => {
+        th.addEventListener('click', () => {
+            const column = th.getAttribute('data-sort');
+            if (seriesSort.column === column) {
+                seriesSort.dir = seriesSort.dir === 'asc' ? 'desc' : 'asc';
+            }
+            else {
+                seriesSort = { column, dir: 'asc' };
+            }
+            renderSeriesViews();
+        });
+    });
     // Upcoming Books
     refreshUpcomingBtn.addEventListener('click', loadUpcomingBooks);
     document.querySelectorAll('.nav-item[data-tab="upcoming"]').forEach(item => {
@@ -115,34 +149,35 @@ function setupEventListeners() {
     importFileInput.addEventListener('change', importData);
 }
 /**
- * Load series list
+ * Load series list: fetch everything once, build a plain view-model per series,
+ * then hand off to renderSeriesViews() for the actual card/list rendering so
+ * switching view modes or re-sorting/searching doesn't need to re-fetch storage.
  */
 async function loadSeries() {
     const allSeries = await StorageManager.getAllSeries();
     if (allSeries.length === 0) {
+        allSeriesViewModels = [];
         seriesListContainer.style.display = 'none';
+        seriesListTable.style.display = 'none';
+        noSeriesSearchResults.style.display = 'none';
         noSeriesMessage.style.display = 'flex';
         return;
     }
-    seriesListContainer.style.display = 'grid';
     noSeriesMessage.style.display = 'none';
-    // Clear existing
-    seriesListContainer.innerHTML = '';
-    // Sort by title
-    allSeries.sort((a, b) => a.title.localeCompare(b.title));
     const lastCheck = await chrome.storage.local.get('lastCheck');
     const lastCheckData = lastCheck.lastCheck || {};
-    for (const series of allSeries) {
-        const card = await createSeriesCard(series, lastCheckData[series.id]);
-        seriesListContainer.appendChild(card);
-    }
+    const snapshots = await chrome.storage.local.get('snapshots');
+    const snapshotsData = snapshots.snapshots || {};
+    const updatesData = await chrome.storage.local.get('updates');
+    const allUpdates = updatesData.updates || [];
+    allSeriesViewModels = await Promise.all(allSeries.map(series => buildSeriesViewModel(series, lastCheckData[series.id], snapshotsData, allUpdates)));
+    renderSeriesViews();
 }
 /**
- * Create series card element
+ * Compute the display/sort/search data for one series, independent of which view
+ * (cards or table) will render it.
  */
-async function createSeriesCard(series, lastCheckTime) {
-    const card = document.createElement('div');
-    card.className = `series-card ${series.enabled ? '' : 'disabled'}`;
+async function buildSeriesViewModel(series, lastCheckTime, snapshotsData, allUpdates) {
     const sources = [];
     if (series.audibleSearchUrl)
         sources.push('Audible');
@@ -152,8 +187,6 @@ async function createSeriesCard(series, lastCheckTime) {
         ? formatTimestamp(lastCheckTime)
         : 'Not checked';
     // Get book count from snapshots
-    const snapshots = await chrome.storage.local.get('snapshots');
-    const snapshotsData = snapshots.snapshots || {};
     let bookCount = 0;
     Object.keys(snapshotsData).forEach(key => {
         if (key.startsWith(`${series.id}_`)) {
@@ -164,14 +197,11 @@ async function createSeriesCard(series, lastCheckTime) {
         }
     });
     // Get updates for this series
-    const updatesData = await chrome.storage.local.get('updates');
-    const allUpdates = updatesData.updates || [];
     const seriesUpdates = allUpdates.filter((u) => u.seriesId === series.id);
-    // Check for unacknowledged updates
-    const hasUnacknowledgedUpdates = seriesUpdates.filter((u) => !u.acknowledged).length > 0;
-    const alertClass = hasUnacknowledgedUpdates ? 'series-card-alert' : '';
+    const unacknowledgedCount = seriesUpdates.filter((u) => !u.acknowledged).length;
+    const hasUnacknowledgedUpdates = unacknowledgedCount > 0;
     const alertBadge = hasUnacknowledgedUpdates
-        ? `<span class="alert-badge" title="New updates available!">🔔 ${seriesUpdates.filter((u) => !u.acknowledged).length}</span>`
+        ? `<span class="alert-badge" title="New updates available!">🔔 ${unacknowledgedCount}</span>`
         : '';
     // Surface the most recent audit check's rejections directly on the card, so a
     // book that was scraped but filtered out (wrong author, title mismatch, too old,
@@ -184,64 +214,204 @@ async function createSeriesCard(series, lastCheckTime) {
     const auditWarningBadge = latestRejectionCount > 0
         ? `<span class="audit-warning-badge" title="Last check rejected ${latestRejectionCount} candidate(s): ${escapeHtml(Object.entries(latestAudit.rejectionReasons).map(([r, c]) => `${r.replace(/_/g, ' ')} (${c})`).join(', '))}. Click to view in Audit Log.">⚠️ ${latestRejectionCount} rejected</span>`
         : '';
-    // Build next book display (audio + text)
+    // Build next book display (audio + text) plus a plain numeric value for sorting
     const nextAudio = series.nextAudioBook;
     const nextText = series.nextTextBook;
     let nextBookDisplay = '';
+    let nextSortValue = null;
     if (nextAudio && nextText) {
         nextBookDisplay = `<span title="Audio: ${nextAudio}, Text: ${nextText}">🔊 ${nextAudio} | 📖 ${nextText}</span>`;
+        nextSortValue = nextAudio;
     }
     else if (nextAudio) {
         nextBookDisplay = `<span>🔊 Audio: ${nextAudio}</span>`;
+        nextSortValue = nextAudio;
     }
     else if (nextText) {
         nextBookDisplay = `<span>📖 Text: ${nextText}</span>`;
+        nextSortValue = nextText;
     }
     else {
-        nextBookDisplay = `<span>Next: ${escapeHtml(series.nextInstallment)}</span>`;
+        // nextAudioBook/nextText are the auto-computed values from the latest scrape;
+        // nextInstallment is just a manual placeholder (defaults to "1" when a series
+        // is added and never overwritten if auto-detection never succeeds). Label it
+        // as unconfirmed so it doesn't read as verified data.
+        nextBookDisplay = `<span title="Not yet confirmed by a scrape - manually set or default value">Next: ${escapeHtml(series.nextInstallment)} (unconfirmed)</span>`;
+        const parsed = parseInt(series.nextInstallment, 10);
+        nextSortValue = isNaN(parsed) ? null : parsed;
     }
-    const statusBadge = series.completionStatus === 'complete'
+    const statusText = series.completionStatus === 'complete' ? 'complete'
+        : series.completionStatus === 'ongoing' ? 'ongoing' : 'unknown';
+    const statusBadge = statusText === 'complete'
         ? '<span style="color: #059669;">● Complete</span>'
-        : series.completionStatus === 'ongoing'
+        : statusText === 'ongoing'
             ? '<span style="color: #d97706;">● Ongoing</span>'
             : '<span style="color: #94a3b8;">● Unknown</span>';
-    card.className = `series-card ${alertClass}`;
+    return {
+        series,
+        id: series.id,
+        title: series.title,
+        enabled: series.enabled,
+        sourcesText: sources.join(', ') || 'No sources',
+        bookCount,
+        lastCheckText,
+        lastCheckTime: lastCheckTime || 0,
+        nextBookDisplay,
+        nextSortValue,
+        statusBadge,
+        statusText,
+        hasUnacknowledgedUpdates,
+        alertBadge,
+        auditWarningBadge,
+        latestRejectionCount
+    };
+}
+/**
+ * Apply the current search/sort/view-mode to allSeriesViewModels and (re)render.
+ * Called on load, on search input, on sort-header click, and on view-mode switch.
+ */
+function renderSeriesViews() {
+    const query = seriesSearchQuery.trim().toLowerCase();
+    const filtered = query
+        ? allSeriesViewModels.filter(vm => vm.title.toLowerCase().includes(query) || vm.sourcesText.toLowerCase().includes(query))
+        : allSeriesViewModels.slice();
+    filtered.sort((a, b) => compareSeriesViewModels(a, b, seriesSort.column, seriesSort.dir));
+    const hasAny = allSeriesViewModels.length > 0;
+    const hasResults = filtered.length > 0;
+    noSeriesSearchResults.style.display = hasAny && !hasResults ? 'block' : 'none';
+    seriesListContainer.style.display = seriesViewMode === 'card' && hasResults ? 'grid' : 'none';
+    seriesListTable.style.display = seriesViewMode === 'list' && hasResults ? 'block' : 'none';
+    updateSortIndicators();
+    if (seriesViewMode === 'card') {
+        seriesListContainer.innerHTML = '';
+        filtered.forEach(vm => seriesListContainer.appendChild(createSeriesCard(vm)));
+    }
+    else {
+        seriesTableBody.innerHTML = '';
+        filtered.forEach(vm => seriesTableBody.appendChild(createSeriesRow(vm)));
+    }
+}
+/**
+ * Comparator for the sortable list-view columns. "next" always pushes series with
+ * no confirmed next-book number to the bottom, regardless of sort direction, since
+ * there's nothing meaningful to compare them by.
+ */
+function compareSeriesViewModels(a, b, column, dir) {
+    const mult = dir === 'asc' ? 1 : -1;
+    if (column === 'next') {
+        if (a.nextSortValue == null && b.nextSortValue == null)
+            return 0;
+        if (a.nextSortValue == null)
+            return 1;
+        if (b.nextSortValue == null)
+            return -1;
+        return (a.nextSortValue - b.nextSortValue) * mult;
+    }
+    switch (column) {
+        case 'sources':
+            return a.sourcesText.localeCompare(b.sourcesText) * mult;
+        case 'bookCount':
+            return (a.bookCount - b.bookCount) * mult;
+        case 'status':
+            return a.statusText.localeCompare(b.statusText) * mult;
+        case 'lastCheck':
+            return (a.lastCheckTime - b.lastCheckTime) * mult;
+        case 'title':
+        default:
+            return a.title.localeCompare(b.title) * mult;
+    }
+}
+function updateSortIndicators() {
+    seriesListTable.querySelectorAll('th[data-sort]').forEach(th => {
+        const column = th.getAttribute('data-sort');
+        th.classList.toggle('sort-active', column === seriesSort.column);
+        th.querySelector('.sort-arrow')?.remove();
+        const arrow = document.createElement('span');
+        arrow.className = 'sort-arrow';
+        arrow.textContent = column === seriesSort.column ? (seriesSort.dir === 'asc' ? '▲' : '▼') : '↕';
+        th.appendChild(arrow);
+    });
+}
+/**
+ * Switch between card and list view. Persisted to localStorage (per-browser,
+ * scoped to this extension) so the options page reopens in whichever view was
+ * last used.
+ */
+function setSeriesViewMode(mode) {
+    seriesViewMode = mode;
+    localStorage.setItem(SERIES_VIEW_MODE_KEY, mode);
+    cardViewBtn.classList.toggle('active', mode === 'card');
+    listViewBtn.classList.toggle('active', mode === 'list');
+    renderSeriesViews();
+}
+/**
+ * Create series card element
+ */
+function createSeriesCard(vm) {
+    const card = document.createElement('div');
+    card.className = `series-card ${vm.enabled ? '' : 'disabled'} ${vm.hasUnacknowledgedUpdates ? 'series-card-alert' : ''}`;
     card.innerHTML = `
     <div class="series-card-header">
-      <h3 class="series-card-title">${escapeHtml(series.title)} ${alertBadge} ${auditWarningBadge}</h3>
+      <h3 class="series-card-title">${escapeHtml(vm.title)} ${vm.alertBadge} ${vm.auditWarningBadge}</h3>
       <div class="series-card-meta">
-        <span>${sources.join(', ') || 'No sources'}</span>
-        ${bookCount > 0 ? `<span>•</span><span>${bookCount} books found</span>` : ''}
+        <span>${vm.sourcesText}</span>
+        ${vm.bookCount > 0 ? `<span>•</span><span>${vm.bookCount} books found</span>` : ''}
         <span>•</span>
-        ${nextBookDisplay}
+        ${vm.nextBookDisplay}
       </div>
     </div>
     <div class="series-card-body">
       <div class="series-info-row">
         <span class="series-info-label">Last Check</span>
-        <span class="series-info-value">${lastCheckText}</span>
+        <span class="series-info-value">${vm.lastCheckText}</span>
       </div>
       <div class="series-info-row">
         <span class="series-info-label">Status</span>
-        <span class="series-info-value">${statusBadge}</span>
+        <span class="series-info-value">${vm.statusBadge}</span>
       </div>
     </div>
     <div class="series-card-actions">
       <button class="btn-card edit-btn">Edit</button>
-      ${bookCount > 0 ? '<button class="btn-card view-books-btn">View Books</button>' : ''}
+      ${vm.bookCount > 0 ? '<button class="btn-card view-books-btn">View Books</button>' : ''}
       <button class="btn-card check-btn">Check Now</button>
-      ${hasUnacknowledgedUpdates ? '<button class="btn-card ack-btn" style="background: #10b981; color: white;">✓ Acknowledge</button>' : ''}
+      ${vm.hasUnacknowledgedUpdates ? '<button class="btn-card ack-btn" style="background: #10b981; color: white;">✓ Acknowledge</button>' : ''}
       <button class="btn-card danger delete-btn">Delete</button>
     </div>
   `;
-    // Add event listeners
-    card.querySelector('.edit-btn')?.addEventListener('click', () => openSeriesModal(series));
-    card.querySelector('.view-books-btn')?.addEventListener('click', () => viewSeriesBooks(series));
-    card.querySelector('.check-btn')?.addEventListener('click', () => checkSeries(series.id));
-    card.querySelector('.ack-btn')?.addEventListener('click', () => acknowledgeSeriesUpdates(series.id));
-    card.querySelector('.delete-btn')?.addEventListener('click', () => deleteSeries(series.id));
-    card.querySelector('.audit-warning-badge')?.addEventListener('click', () => jumpToAuditLog(series.id));
+    attachSeriesActionListeners(card, vm);
     return card;
+}
+/**
+ * Create series table row element (list view)
+ */
+function createSeriesRow(vm) {
+    const row = document.createElement('tr');
+    row.className = vm.enabled ? '' : 'disabled';
+    row.innerHTML = `
+    <td class="series-table-title-cell">${escapeHtml(vm.title)} ${vm.alertBadge} ${vm.auditWarningBadge}</td>
+    <td>${vm.sourcesText}</td>
+    <td>${vm.bookCount || '—'}</td>
+    <td>${vm.nextBookDisplay}</td>
+    <td>${vm.statusBadge}</td>
+    <td>${vm.lastCheckText}</td>
+    <td class="series-table-actions-cell">
+      <button class="btn-card edit-btn">Edit</button>
+      ${vm.bookCount > 0 ? '<button class="btn-card view-books-btn">View Books</button>' : ''}
+      <button class="btn-card check-btn">Check Now</button>
+      ${vm.hasUnacknowledgedUpdates ? '<button class="btn-card ack-btn" style="background: #10b981; color: white;">✓ Ack</button>' : ''}
+      <button class="btn-card danger delete-btn">Delete</button>
+    </td>
+  `;
+    attachSeriesActionListeners(row, vm);
+    return row;
+}
+function attachSeriesActionListeners(el, vm) {
+    el.querySelector('.edit-btn')?.addEventListener('click', () => openSeriesModal(vm.series));
+    el.querySelector('.view-books-btn')?.addEventListener('click', () => viewSeriesBooks(vm.series));
+    el.querySelector('.check-btn')?.addEventListener('click', () => checkSeries(vm.id));
+    el.querySelector('.ack-btn')?.addEventListener('click', () => acknowledgeSeriesUpdates(vm.id));
+    el.querySelector('.delete-btn')?.addEventListener('click', () => deleteSeries(vm.id));
+    el.querySelector('.audit-warning-badge')?.addEventListener('click', () => jumpToAuditLog(vm.id));
 }
 /**
  * Open series modal for add/edit
