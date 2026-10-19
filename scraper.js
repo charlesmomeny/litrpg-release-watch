@@ -383,6 +383,14 @@ export class Scraper {
      * Get (or lazily create) a minimized, unfocused window to host scrape tabs in,
      * so the user never sees them pop up or steal focus. Reused across checks;
      * recreated automatically if the user closes it.
+     *
+     * The in-memory id alone isn't enough: MV3 service workers are killed after
+     * ~30s idle and restart fresh before most alarm-triggered checks, which used
+     * to wipe this.hiddenWindowId and spawn a brand new window every time -
+     * leaving a trail of abandoned "about:blank" windows and occasionally racing
+     * into a create failure that silently fell back to the user's active window.
+     * Persist the id in storage.session (survives worker restarts, clears with
+     * the browser) so the same hidden window is actually reused.
      */
     static async getHiddenWindowId() {
         if (this.hiddenWindowId !== null) {
@@ -396,6 +404,26 @@ export class Scraper {
             }
         }
         try {
+            const stored = await chrome.storage.session.get('hiddenScrapeWindowId');
+            const storedId = stored.hiddenScrapeWindowId;
+            if (typeof storedId === 'number') {
+                try {
+                    await chrome.windows.get(storedId);
+                    this.hiddenWindowId = storedId;
+                    return storedId;
+                }
+                catch (e) {
+                    // Stored window is gone (e.g. user closed it) - fall through and recreate
+                }
+            }
+        }
+        catch (e) {
+            // storage.session unavailable - continue without persistence
+        }
+        // Recovering a tracked window failed - sweep up any windows orphaned by
+        // earlier (pre-persistence) worker restarts before making a new one.
+        await this.closeOrphanedHiddenWindows();
+        try {
             // Chrome rejects windows.create() calls that combine width/height with
             // state: 'minimized' in one call, so create it normal-sized first, then
             // minimize it in a follow-up update.
@@ -406,8 +434,21 @@ export class Scraper {
                 width: 1280,
                 height: 900
             });
-            await chrome.windows.update(win.id, { state: 'minimized', focused: false });
+            // Track the window immediately, before the minimize call, so a failure
+            // below still leaves it recognized and reused rather than orphaned.
             this.hiddenWindowId = win.id;
+            try {
+                await chrome.storage.session.set({ hiddenScrapeWindowId: win.id });
+            }
+            catch (e) {
+                // Best effort - worse case we recreate a window next worker restart
+            }
+            try {
+                await chrome.windows.update(win.id, { state: 'minimized', focused: false });
+            }
+            catch (e) {
+                console.warn('Failed to minimize hidden scraping window (still usable, just visible):', e);
+            }
             return this.hiddenWindowId;
         }
         catch (e) {
@@ -415,6 +456,38 @@ export class Scraper {
             // rather than breaking scraping entirely.
             console.warn('Failed to create hidden scraping window, falling back to current window:', e);
             return null;
+        }
+    }
+    /**
+     * Close any leftover popup windows that look like ones we created (whose
+     * id we no longer have tracked) - e.g. abandoned "about:blank" windows left
+     * behind by service-worker restarts before hidden-window tracking persisted
+     * across them. Best effort only; never blocks scraping.
+     */
+    static async closeOrphanedHiddenWindows() {
+        try {
+            const windows = await chrome.windows.getAll({ populate: true });
+            for (const win of windows) {
+                if (win.id === this.hiddenWindowId || win.type !== 'popup') {
+                    continue;
+                }
+                const tabs = win.tabs || [];
+                const looksLikeOurs = tabs.length > 0 && tabs.every(t => !t.url ||
+                    t.url === 'about:blank' ||
+                    t.url.includes('audible.com') ||
+                    t.url.includes('amazon.com'));
+                if (looksLikeOurs) {
+                    try {
+                        await chrome.windows.remove(win.id);
+                    }
+                    catch (e) {
+                        // Ignore - window may have already closed
+                    }
+                }
+            }
+        }
+        catch (e) {
+            // Best effort cleanup only
         }
     }
     /**
