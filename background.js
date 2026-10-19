@@ -5,7 +5,7 @@ import { StorageManager } from './storage.js';
 import { Scraper } from './scraper.js';
 import { DiffEngine } from './diff.js';
 import { NotificationManager } from './notifications.js';
-import { itemMatchesSeries } from './utils.js';
+import { itemMatchesSeries, extractAsin } from './utils.js';
 // CRITICAL: Make modules globally accessible for debugging and checks
 globalThis.StorageManager = StorageManager;
 globalThis.Scraper = Scraper;
@@ -257,8 +257,31 @@ async function checkSource(series, source, url, settings) {
         }
         // Compare and detect updates
         const updates = DiffEngine.compareSnapshots(oldSnapshot, newSnapshot, series.title, settings, series.expectedAuthor, historicalTitles);
-        // Persist audit log entry capturing what happened during this check
         const audit = DiffEngine.getLastAudit();
+        // Pre-orders rejected on an earlier check are already in the baseline, so the
+        // diff above never revisits them - alert here once one shows up as available.
+        const pendingPreorders = await StorageManager.getPendingPreorders(series.id);
+        const resolvedPreorderAsins = [];
+        const alertedAsins = new Set(updates.map(u => extractAsin(u.bookUrl)).filter(a => a));
+        for (const item of newSnapshot.items) {
+            const asin = extractAsin(item.url);
+            const pending = asin ? pendingPreorders[asin] : undefined;
+            if (!pending || pending.source !== source || item.availability !== 'available' || resolvedPreorderAsins.includes(asin))
+                continue;
+            resolvedPreorderAsins.push(asin);
+            if (alertedAsins.has(asin) || allBookHistory[asin]?.alertGenerated)
+                continue;
+            console.log(`  ✅ PRE-ORDER RELEASED: ${item.title} (ASIN: ${asin})`);
+            updates.push(DiffEngine.createUpdate(series.id, series.title, 'NEW_ITEM', source, item, undefined, item.title));
+            audit?.candidates.push({ title: item.title, author: item.author, bookNumber: item.bookNumber, asin, accepted: true, rejectionReason: undefined, releaseDate: item.releaseDate });
+        }
+        if (resolvedPreorderAsins.length > 0) {
+            await StorageManager.removePendingPreorders(series.id, resolvedPreorderAsins);
+        }
+        if (audit && audit.preorderRejections.length > 0) {
+            await StorageManager.addPendingPreorders(series.id, source, audit.preorderRejections);
+        }
+        // Persist audit log entry capturing what happened during this check
         if (audit) {
             await StorageManager.appendAuditEntry(series.id, {
                 timestamp: Date.now(),

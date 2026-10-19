@@ -65,7 +65,11 @@ export class DiffEngine {
             detectionMode: 'first-check',
             trustedAuthors: [],
             rejectionReasons: {},
-            candidates: []
+            candidates: [],
+            // Books held back only because they're pre-orders - the caller tracks these
+            // so it can alert once they release (their ASIN joins the baseline now, so
+            // the normal new-book detection will never look at them again)
+            preorderRejections: []
         };
         // If no old snapshot, this is first check - don't generate updates
         if (!oldSnapshot || !oldSnapshot.items || oldSnapshot.items.length === 0) {
@@ -217,6 +221,7 @@ export class DiffEngine {
                 if (settings.ignorePreorders && book.item.availability === 'preorder') {
                     console.log(`  Skipping "${book.item.title}": pre-order`);
                     this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'preorder', book.item.releaseDate);
+                    this.lastAudit.preorderRejections.push({ asin: book.asin, title: book.item.title, bookNumber: undefined });
                     return;
                 }
                 // AGE CHECK: reject books with release dates older than the configured threshold.
@@ -304,6 +309,7 @@ export class DiffEngine {
                 console.log(`  Skipping Book ${bookNum}: pre-order`);
                 /* merged with recordCandidate */
                 this.recordCandidate(book.item.title, book.item.author, bookNum, book.asin || undefined, false, 'preorder', book.item.releaseDate);
+                this.lastAudit.preorderRejections.push({ asin: book.asin, title: book.item.title, bookNumber: bookNum });
                 return;
             }
             // AGE CHECK: reject books with release dates older than the configured threshold

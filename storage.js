@@ -41,6 +41,61 @@ export class StorageManager {
         if (!data.errorLog) {
             await chrome.storage.local.set({ errorLog: [] });
         }
+        if (!data.pendingPreorders) {
+            await this.backfillPendingPreorders(data.auditLog || {}, data.bookHistory || {});
+        }
+    }
+    /**
+     * One-time seed of pendingPreorders from the audit log, so pre-orders rejected
+     * before this tracking existed (still within audit retention) still get their
+     * release-day alert.
+     */
+    static async backfillPendingPreorders(auditLog, bookHistory) {
+        const pendingPreorders = {};
+        for (const [seriesId, entries] of Object.entries(auditLog)) {
+            for (const entry of entries) {
+                for (const c of entry.candidates || []) {
+                    if (c.rejectionReason !== 'preorder' || !c.asin || bookHistory[c.asin]?.alertGenerated)
+                        continue;
+                    pendingPreorders[seriesId] = pendingPreorders[seriesId] || {};
+                    pendingPreorders[seriesId][c.asin] = {
+                        asin: c.asin,
+                        source: entry.source,
+                        title: c.title,
+                        bookNumber: c.bookNumber,
+                        rejectedAt: entry.timestamp
+                    };
+                }
+            }
+        }
+        await chrome.storage.local.set({ pendingPreorders });
+    }
+    /**
+     * Pending pre-orders - books rejected only for being pre-orders, keyed by ASIN
+     * per series. Checked on every scrape so the alert fires once the book releases.
+     */
+    static async getPendingPreorders(seriesId) {
+        const { pendingPreorders = {} } = await chrome.storage.local.get('pendingPreorders');
+        return pendingPreorders[seriesId] || {};
+    }
+    static async addPendingPreorders(seriesId, source, rejections) {
+        const { pendingPreorders = {} } = await chrome.storage.local.get('pendingPreorders');
+        const seriesPending = pendingPreorders[seriesId] || {};
+        for (const r of rejections) {
+            if (!r.asin || seriesPending[r.asin])
+                continue;
+            seriesPending[r.asin] = { asin: r.asin, source, title: r.title, bookNumber: r.bookNumber, rejectedAt: Date.now() };
+        }
+        pendingPreorders[seriesId] = seriesPending;
+        await chrome.storage.local.set({ pendingPreorders });
+    }
+    static async removePendingPreorders(seriesId, asins) {
+        const { pendingPreorders = {} } = await chrome.storage.local.get('pendingPreorders');
+        const seriesPending = pendingPreorders[seriesId];
+        if (!seriesPending)
+            return;
+        asins.forEach(asin => delete seriesPending[asin]);
+        await chrome.storage.local.set({ pendingPreorders });
     }
     /**
      * Get all series
@@ -85,12 +140,13 @@ export class StorageManager {
      * Delete series
      */
     static async deleteSeries(id) {
-        const { series = {}, snapshots = {} } = await chrome.storage.local.get(['series', 'snapshots']);
+        const { series = {}, snapshots = {}, pendingPreorders = {} } = await chrome.storage.local.get(['series', 'snapshots', 'pendingPreorders']);
         delete series[id];
         // Delete associated snapshots
         const snapshotKeys = Object.keys(snapshots).filter(key => key.startsWith(`${id}_`));
         snapshotKeys.forEach(key => delete snapshots[key]);
-        await chrome.storage.local.set({ series, snapshots });
+        delete pendingPreorders[id];
+        await chrome.storage.local.set({ series, snapshots, pendingPreorders });
     }
     /**
      * Get snapshot for series and source
