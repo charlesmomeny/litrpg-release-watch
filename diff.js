@@ -153,6 +153,80 @@ export class DiffEngine {
         const knownAuthors = trustedAuthors;
         // HYBRID SYSTEM: Check if series has book numbers
         const hasBookNumbers = oldMaxNumber > 0 || newMaxNumber > 0;
+        // ASIN-based check for a single new, unnumbered book. Used for whole series without
+        // numbers, and for unnumbered entries in numbered series (e.g. "Series: Wild Lands"
+        // next to numbered siblings), which the number comparison can never see.
+        const checkNewAsin = (book) => {
+            // LANGUAGE CHECK: Reject obvious non-English titles
+            if (this.isLikelyNonEnglish(book.item.title)) {
+                console.log(`  Skipping "${book.item.title}": Title appears to be non-English`);
+                /* merged with recordCandidate */
+                this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'non_english', book.item.releaseDate);
+                return;
+            }
+            // EDITION VARIANT CHECK: Reject foreign-language edition markers in English titles
+            // (e.g., "Title (French Edition)", "[Spanish Edition]", "Narración en Español")
+            if (this.isForeignEditionVariant(book.item.title)) {
+                console.log(`  Skipping "${book.item.title}": Foreign-language edition variant`);
+                /* merged with recordCandidate */
+                this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'foreign_edition', book.item.releaseDate);
+                return;
+            }
+            // RE-RELEASE CHECK: If this title already existed in the previous snapshot (with a
+            // different ASIN), it's a re-release/re-encoded version, not new content. The user
+            // has already been notified about this book under its original ASIN.
+            const titleNorm = normalizeForDedup(book.item.title);
+            if (titleNorm && oldTitlesNormalized.has(titleNorm)) {
+                console.log(`  Skipping "${book.item.title}": Title already in previous snapshot (likely re-release with new ASIN)`);
+                this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'already_seen_title', book.item.releaseDate);
+                return;
+            }
+            // MANDATORY author check (even for ASIN-based detection)
+            if (!book.item.author) {
+                console.log(`  Skipping "${book.item.title}": No author information (cannot verify)`);
+                /* merged with recordCandidate */
+                this.recordCandidate(book.item.title, undefined, undefined, book.asin || undefined, false, 'missing_author', book.item.releaseDate);
+                return;
+            }
+            if (knownAuthors.size > 0) {
+                if (!this.anyAuthorMatches(book.item.author, knownAuthors)) {
+                    console.log(`  Skipping "${book.item.title}": Author "${book.item.author}" doesn't match known authors`);
+                    console.log(`    Expected one of:`, Array.from(knownAuthors));
+                    /* merged with recordCandidate */
+                    this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'author_mismatch', book.item.releaseDate);
+                    return;
+                }
+            }
+            // STRICT title match - skip when expectedAuthor is locked (author lock is stronger).
+            // The strict title check only runs when we have to rely on inferred trust.
+            if (trustMode === 'inferred' && !this.strictTitleMatch(seriesTitle, book.item.title)) {
+                console.log(`  Skipping "${book.item.title}": Title does not contain all significant series words`);
+                console.log(`    Series: "${seriesTitle}"`);
+                console.log(`    Book: "${book.item.title}"`);
+                /* merged with recordCandidate */
+                this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'title_mismatch', book.item.releaseDate);
+                return;
+            }
+            // Check pre-order setting
+            if (settings.ignorePreorders && book.item.availability === 'preorder') {
+                console.log(`  Skipping "${book.item.title}": pre-order`);
+                this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'preorder', book.item.releaseDate);
+                this.lastAudit.preorderRejections.push({ asin: book.asin, title: book.item.title, bookNumber: undefined });
+                return;
+            }
+            // AGE CHECK: reject books with release dates older than the configured threshold.
+            // This catches backlog titles that Audible surfaces into search results long after
+            // their original release (they look "new" by ASIN but aren't).
+            if (this.isBookTooOld(book.item.releaseDate, settings.maxBookAgeDays)) {
+                console.log(`  Skipping "${book.item.title}": Release date ${book.item.releaseDate} is older than ${settings.maxBookAgeDays} days`);
+                this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'too_old', book.item.releaseDate);
+                return;
+            }
+            // New item detected via ASIN!
+            updates.push(this.createUpdate(newSnapshot.seriesId, seriesTitle, 'NEW_ITEM', newSnapshot.source, book.item, undefined, book.item.title));
+            this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, true, undefined, book.item.releaseDate);
+            console.log(`  ✅ NEW ITEM (ASIN-based): ${book.item.title} by ${book.item.author} (ASIN: ${book.asin})`);
+        };
         if (!hasBookNumbers) {
             // FALLBACK: ASIN-based detection for series without numbers
             console.log(`${seriesTitle}: No book numbers detected, using ASIN-based detection`);
@@ -165,91 +239,23 @@ export class DiffEngine {
                 return updates;
             }
             console.log(`${seriesTitle}: Found ${newAsins.length} new ASINs`);
-            // Process each new ASIN
-            newAsins.forEach(book => {
-                // LANGUAGE CHECK: Reject obvious non-English titles
-                if (this.isLikelyNonEnglish(book.item.title)) {
-                    console.log(`  Skipping "${book.item.title}": Title appears to be non-English`);
-                    /* merged with recordCandidate */
-                    this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'non_english', book.item.releaseDate);
-                    return;
-                }
-                // EDITION VARIANT CHECK: Reject foreign-language edition markers in English titles
-                // (e.g., "Title (French Edition)", "[Spanish Edition]", "Narración en Español")
-                if (this.isForeignEditionVariant(book.item.title)) {
-                    console.log(`  Skipping "${book.item.title}": Foreign-language edition variant`);
-                    /* merged with recordCandidate */
-                    this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'foreign_edition', book.item.releaseDate);
-                    return;
-                }
-                // RE-RELEASE CHECK: If this title already existed in the previous snapshot (with a
-                // different ASIN), it's a re-release/re-encoded version, not new content. The user
-                // has already been notified about this book under its original ASIN.
-                const titleNorm = normalizeForDedup(book.item.title);
-                if (titleNorm && oldTitlesNormalized.has(titleNorm)) {
-                    console.log(`  Skipping "${book.item.title}": Title already in previous snapshot (likely re-release with new ASIN)`);
-                    this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'already_seen_title', book.item.releaseDate);
-                    return;
-                }
-                // MANDATORY author check (even for ASIN-based detection)
-                if (!book.item.author) {
-                    console.log(`  Skipping "${book.item.title}": No author information (cannot verify)`);
-                    /* merged with recordCandidate */
-                    this.recordCandidate(book.item.title, undefined, undefined, book.asin || undefined, false, 'missing_author', book.item.releaseDate);
-                    return;
-                }
-                if (knownAuthors.size > 0) {
-                    if (!this.anyAuthorMatches(book.item.author, knownAuthors)) {
-                        console.log(`  Skipping "${book.item.title}": Author "${book.item.author}" doesn't match known authors`);
-                        console.log(`    Expected one of:`, Array.from(knownAuthors));
-                        /* merged with recordCandidate */
-                        this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'author_mismatch', book.item.releaseDate);
-                        return;
-                    }
-                }
-                // STRICT title match - skip when expectedAuthor is locked (author lock is stronger).
-                // The strict title check only runs when we have to rely on inferred trust.
-                if (trustMode === 'inferred' && !this.strictTitleMatch(seriesTitle, book.item.title)) {
-                    console.log(`  Skipping "${book.item.title}": Title does not contain all significant series words`);
-                    console.log(`    Series: "${seriesTitle}"`);
-                    console.log(`    Book: "${book.item.title}"`);
-                    /* merged with recordCandidate */
-                    this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'title_mismatch', book.item.releaseDate);
-                    return;
-                }
-                // Check pre-order setting
-                if (settings.ignorePreorders && book.item.availability === 'preorder') {
-                    console.log(`  Skipping "${book.item.title}": pre-order`);
-                    this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'preorder', book.item.releaseDate);
-                    this.lastAudit.preorderRejections.push({ asin: book.asin, title: book.item.title, bookNumber: undefined });
-                    return;
-                }
-                // AGE CHECK: reject books with release dates older than the configured threshold.
-                // This catches backlog titles that Audible surfaces into search results long after
-                // their original release (they look "new" by ASIN but aren't).
-                if (this.isBookTooOld(book.item.releaseDate, settings.maxBookAgeDays)) {
-                    console.log(`  Skipping "${book.item.title}": Release date ${book.item.releaseDate} is older than ${settings.maxBookAgeDays} days`);
-                    this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, false, 'too_old', book.item.releaseDate);
-                    return;
-                }
-                // New item detected via ASIN!
-                updates.push(this.createUpdate(newSnapshot.seriesId, seriesTitle, 'NEW_ITEM', newSnapshot.source, book.item, undefined, book.item.title));
-                this.recordCandidate(book.item.title, book.item.author, undefined, book.asin || undefined, true, undefined, book.item.releaseDate);
-                console.log(`  ✅ NEW ITEM (ASIN-based): ${book.item.title} by ${book.item.author} (ASIN: ${book.asin})`);
-            });
+            newAsins.forEach(checkNewAsin);
             return updates;
         }
+        // Mark detection mode
+        this.lastAudit.detectionMode = 'number';
+        // Unnumbered new ASINs in a numbered series get the ASIN-based checks
+        newBooks.items
+            .filter(book => book.bookNumber === null && book.asin && !oldAsins.has(book.asin))
+            .forEach(checkNewAsin);
         // NUMBER-BASED DETECTION: Check if any NEW book numbers appeared (higher than old max)
         const newBookNumbers = newBooks.items
             .filter(book => book.bookNumber !== null && book.bookNumber > oldMaxNumber)
             .map(book => book.bookNumber);
         if (newBookNumbers.length === 0) {
             // No new books
-            this.lastAudit.detectionMode = 'number';
             return updates;
         }
-        // Mark detection mode
-        this.lastAudit.detectionMode = 'number';
         // Found new book numbers! Verify they're actually new (not duplicates with different ASINs)
         const uniqueNewBooks = [...new Set(newBookNumbers)].sort((a, b) => a - b);
         uniqueNewBooks.forEach(bookNum => {
